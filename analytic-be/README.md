@@ -1,6 +1,6 @@
 # analytic-be
 
-Hono + MongoDB service that scrapes Indonesian news portals every hour and stores distinct articles (with portal and category information) for sentiment analysis.
+Hono service that serves Indonesian news articles from the local `db-sample` folder, analyses their sentiment with Gemma and serves the results to `analytic-fe`. It does not use MongoDB. The scraper for 12 portals is included but off by default.
 
 ## Supported portals
 
@@ -25,11 +25,31 @@ Note that `robots.txt` on **kompas.com** disallows AI crawlers (ClaudeBot, anthr
 
 ```sh
 bun install
-cp .env.example .env   # adjust MONGODB_URI etc. if needed
-bun run dev            # http://localhost:3000
+cp .env.example .env   # set GEMINI_API_KEY
+bun run dev            # http://localhost:4000
 ```
 
-Requires a running MongoDB (default `mongodb://127.0.0.1:27017`, database `news_sentiment`).
+### Data: db-sample
+
+The data comes from `../db-sample` (`DB_SAMPLE_DIR`), a `mongoexport` backup with one Extended JSON document per line per collection. It is read into memory at startup; there is no database server or MongoDB connection.
+
+- Analysis periods count back from the newest article in the folder, so the snapshot keeps showing its last days instead of going empty over time.
+- Gemma's results are appended to `db-sample/sentiments.jsonl` (`SENTIMENT_FILE`), one JSON line per analysed article, and loaded again on the next start. The backup's own files are not changed by analysis.
+- If the folder cannot be read, the server still starts and every data route answers `503` with the reason.
+
+### Scraping (optional)
+
+Off unless `SCRAPE_ENABLED=true`. When on, the scraper runs hourly (and once at startup unless `SCRAPE_ON_START=false`) and writes into `db-sample` itself: new articles and skipped URLs are appended to `articles.json` / `skipped_urls.json`, `portals.json` and `categories.json` are rewritten, runs are appended to `scrape_runs.json`, and `manifest.json` counts are updated. The files stay in `mongoexport` format, so `db-sample/restore.ts` can still load them into MongoDB.
+
+### Sentiment analysis
+
+Articles are classified as positive, neutral or negative by Gemma (`GEMMA_MODEL`, default `gemma-4-26b-a4b-it`) through the Gemini API; create a key in [Google AI Studio](https://aistudio.google.com/apikey) and set `GEMINI_API_KEY`.
+
+Analysis runs on demand: when the frontend asks for a filter (`POST /analysis`), the newest articles in that selection without a sentiment are queued (`ANALYSIS_QUEUE_LIMIT`, default 100). A single worker sends them in batches of `GEMMA_BATCH_SIZE` (title, summary and the first `GEMMA_EXCERPT_CHARS` characters of text), spaced to `GEMMA_RPM` requests per minute, retrying rate-limit and server errors. Results (`label`, `score`, `reason`, `model`, `analyzedAt`) are saved to `sentiments.jsonl`, so each article is analysed once. Articles the model fails on are retried at most 3 times per run of the server.
+
+### Unified categories
+
+Each portal names its sections differently, so `src/taxonomy.ts` maps every `portal:category/subcategory` onto one tree of 13 categories (Nasional, Internasional, Regional, Ekonomi & Bisnis, Teknologi & Sains, Hiburan, Olahraga, Gaya Hidup, Otomotif, Edukasi, Religi, Cek Fakta, Opini & Riset) with sub-categories, e.g. detik `detikFinance / Bursa dan Valas`, Liputan6 `Saham` and CNBC `Market` all become `ekonomi/pasar-modal`. Anything no rule matches lands in `lainnya`; add a rule when a portal introduces a new section.
 
 ## How scraping works
 
@@ -42,13 +62,14 @@ Requires a running MongoDB (default `mongodb://127.0.0.1:27017`, database `news_
 4. New articles are fetched (multi-page stories in one request where the portal supports it: `?page=all`, `?showpage=all`, `?single=1`) and cleaned with the shared extractor in `src/lib/html.ts`: ads, "Baca juga"/"Lihat juga" links (block, inline or trailing), captions, editor initials and portal footers are removed, and the dateline ("Jakarta -") is kept with the first paragraph. Only the thumbnail (`og:image`) is stored, not the media.
 5. Pages that turn out not to be text articles (e.g. a video page) throw `SkipArticle`; the URL is stored in `skipped_urls` for 14 days so it is not fetched again. Other failures are logged in `scrape_runs` and retried on the next run.
 
-## Collections
+## Data files (db-sample)
 
-- `portals`: `key`, `name`, `url`, `indexUrl`, `lastScrapedAt`
-- `categories`: `portalKey`, `name`, `slug`, `parentSlug` (`null` for top level), deduplicated by slug
-- `articles`: `url`, `portal { key, name, url }`, `title`, `description`, `content`, `category { name, slug }`, `subcategory`, `tags`, `author`, `editor`, `imageUrl`, `publishedAt`, `wordCount`, `scrapedAt`
-- `scrape_runs`: `portalKey`, `trigger`, `status`, `listed`, `inserted`, `skipped`, `ignored`, `failed`, `errors`, `startedAt`, `finishedAt`
-- `skipped_urls`: `url`, `portalKey`, `reason`, `createdAt` (expires after 14 days)
+- `articles.json`: `url`, `portal { key, name, url }`, `title`, `description`, `content`, `category { name, slug }`, `subcategory`, `tags`, `author`, `editor`, `imageUrl`, `publishedAt`, `wordCount`, `scrapedAt`
+- `portals.json`: `key`, `name`, `url`, `indexUrl`, `lastScrapedAt`
+- `categories.json`: `portalKey`, `name`, `slug`, `parentSlug` (`null` for top level)
+- `scrape_runs.json`: `portalKey`, `trigger`, `status`, `listed`, `inserted`, `skipped`, `ignored`, `failed`, `errors`, `startedAt`, `finishedAt`
+- `skipped_urls.json`: `url`, `portalKey`, `reason`, `createdAt`
+- `sentiments.jsonl` (written by this service): `articleId`, `label`, `score`, `reason`, `model`, `analyzedAt`
 
 ## API
 
@@ -59,8 +80,17 @@ Requires a running MongoDB (default `mongodb://127.0.0.1:27017`, database `news_
 | GET    | `/portals/:key/articles` | Articles of one portal (same query options as `/articles`)                                    |
 | GET    | `/articles`              | List (no content). Query: `portal` (key, or comma-separated keys), `category`, `subcategory` (slugs), `q`, `page`, `limit` |
 | GET    | `/articles/:id`          | Full article including content                                                                |
-| POST   | `/scrape/run?portal=key` | Start a scrape now (all portals if `portal` omitted); returns 202                             |
+| POST   | `/scrape/run?portal=key` | Start a scrape now (all portals if `portal` omitted); returns 202. `409` while `SCRAPE_ENABLED` is off |
 | GET    | `/scrape/runs`           | Recent scrape runs. Query: `portal`, `limit`                                                  |
+| GET    | `/analysis/categories`   | Unified category tree with article counts and portals. Query: `days` (1, 3, 7, 30)            |
+| POST   | `/analysis`              | Dashboard for a filter (see below)                                                            |
+| GET    | `/analysis/status`       | Analysis queue progress                                                                       |
+
+### `POST /analysis`
+
+Body: `{ "categories": ["olahraga", "ekonomi/energi"], "days": 7, "analyze": "auto" }`. `categories` are unified ids (a root selects all its sub-categories; empty means everything). `analyze` is `auto` (queue the newest unanalysed articles), `all` (up to 1000) or `none` (read only).
+
+Returns totals, a breakdown (by root category, by sub-category when one root is selected, or by portal when one sub-category is selected), per-portal counts, a sentiment trend (2 h to 1 day buckets in WIB, overall plus the 3 largest portals), 12 recent articles spread across portals, `analysis { pending, queued, remaining, configured, lastError }` and `dataset { name, articles, exportedAt, latestArticleAt }`. Only analysed articles count towards sentiment; poll with `analyze: "none"` while `pending` is above zero.
 
 ## Adding a portal
 

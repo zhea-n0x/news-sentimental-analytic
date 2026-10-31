@@ -1,0 +1,482 @@
+[
+  {
+    "portalKey": "kompas",
+    "slug": "news",
+    "parentSlug": null,
+    "name": "News"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "global",
+    "parentSlug": null,
+    "name": "Global"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "nasional",
+    "parentSlug": "news",
+    "name": "Nasional"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "megapolitan",
+    "parentSlug": "news",
+    "name": "Megapolitan"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "regional",
+    "parentSlug": null,
+    "name": "Regional"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "travel",
+    "parentSlug": null,
+    "name": "Travel"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "travel-news",
+    "parentSlug": "travel",
+    "name": "Travel News"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "surabaya",
+    "parentSlug": "regional",
+    "name": "Surabaya"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "cahaya",
+    "parentSlug": null,
+    "name": "Cahaya"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "aktual",
+    "parentSlug": "cahaya",
+    "name": "Aktual"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "hype",
+    "parentSlug": null,
+    "name": "Hype"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "bola",
+    "parentSlug": null,
+    "name": "Bola"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "entertainment",
+    "parentSlug": "hype",
+    "name": "Entertainment"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "badminton",
+    "parentSlug": "bola",
+    "name": "Badminton"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "yogyakarta",
+    "parentSlug": "regional",
+    "name": "Yogyakarta"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "seleb",
+    "parentSlug": "hype",
+    "name": "Seleb"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "motogp",
+    "parentSlug": "bola",
+    "name": "Motogp"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "tren",
+    "parentSlug": null,
+    "name": "Tren"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "money",
+    "parentSlug": null,
+    "name": "Money"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "ekbis",
+    "parentSlug": "money",
+    "name": "Ekbis"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "liga-inggris",
+    "parentSlug": "bola",
+    "name": "Liga Inggris"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "properti",
+    "parentSlug": null,
+    "name": "Properti"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "berita",
+    "parentSlug": "properti",
+    "name": "Berita"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "makassar",
+    "parentSlug": "regional",
+    "name": "Makassar"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "liga-indonesia",
+    "parentSlug": "bola",
+    "name": "Liga Indonesia"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "tekno",
+    "parentSlug": null,
+    "name": "Tekno"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "e-business",
+    "parentSlug": "tekno",
+    "name": "e-Business"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "cek-fakta",
+    "parentSlug": null,
+    "name": "Cek fakta"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "hoaks-atau-fakta",
+    "parentSlug": "cek-fakta",
+    "name": "Hoaks atau Fakta"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "denpasar",
+    "parentSlug": "regional",
+    "name": "Denpasar"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "musik",
+    "parentSlug": "hype",
+    "name": "Musik"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "bandung",
+    "parentSlug": "regional",
+    "name": "Bandung"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "keuangan",
+    "parentSlug": "money",
+    "name": "Keuangan"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "internasional",
+    "parentSlug": "global",
+    "name": "Internasional"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "trenology",
+    "parentSlug": "tekno",
+    "name": "Trenology"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "medan",
+    "parentSlug": "regional",
+    "name": "Medan"
+  },
+  {
+    "portalKey": "kompas",
+    "slug": "energi",
+    "parentSlug": "money",
+    "name": "Energi"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "hiburan",
+    "parentSlug": null,
+    "name": "Hiburan"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "film",
+    "parentSlug": "hiburan",
+    "name": "Film"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "olahraga",
+    "parentSlug": null,
+    "name": "Olahraga"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "moto-gp",
+    "parentSlug": "olahraga",
+    "name": "Moto GP"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "sepakbola",
+    "parentSlug": "olahraga",
+    "name": "Sepakbola"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "ekonomi",
+    "parentSlug": null,
+    "name": "Ekonomi"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "bisnis",
+    "parentSlug": "ekonomi",
+    "name": "Bisnis"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "gaya-hidup",
+    "parentSlug": null,
+    "name": "Gaya Hidup"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "health",
+    "parentSlug": "gaya-hidup",
+    "name": "Health"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "internasional",
+    "parentSlug": null,
+    "name": "Internasional"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "asia-pasifik",
+    "parentSlug": "internasional",
+    "name": "Asia Pasifik"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "nasional",
+    "parentSlug": null,
+    "name": "Nasional"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "politik",
+    "parentSlug": "nasional",
+    "name": "Politik"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "corporate-action",
+    "parentSlug": "ekonomi",
+    "name": "Corporate Action"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "raket",
+    "parentSlug": "olahraga",
+    "name": "Raket"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "seleb",
+    "parentSlug": "hiburan",
+    "name": "Seleb"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "energi",
+    "parentSlug": "ekonomi",
+    "name": "Energi"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "teknologi",
+    "parentSlug": null,
+    "name": "Teknologi"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "lainnya",
+    "parentSlug": "teknologi",
+    "name": "Lainnya"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "hukum-kriminal",
+    "parentSlug": "nasional",
+    "name": "Hukum & Kriminal"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "travel",
+    "parentSlug": "gaya-hidup",
+    "name": "Travel"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "timur-tengah",
+    "parentSlug": "internasional",
+    "name": "Timur Tengah"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "climate",
+    "parentSlug": "teknologi",
+    "name": "Climate"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "edukasi",
+    "parentSlug": null,
+    "name": "Edukasi"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "kampus",
+    "parentSlug": "edukasi",
+    "name": "Kampus"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "ai",
+    "parentSlug": "teknologi",
+    "name": "AI"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "peristiwa",
+    "parentSlug": "nasional",
+    "name": "Peristiwa"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "otomotif",
+    "parentSlug": null,
+    "name": "Otomotif"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "e-vehicle",
+    "parentSlug": "otomotif",
+    "name": "E-vehicle"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "asean",
+    "parentSlug": "internasional",
+    "name": "Asean"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "makro",
+    "parentSlug": "ekonomi",
+    "name": "Makro"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "tren-oto",
+    "parentSlug": "otomotif",
+    "name": "Tren Oto"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "lainnya",
+    "parentSlug": "olahraga",
+    "name": "Lainnya"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "eropa-amerika",
+    "parentSlug": "internasional",
+    "name": "Eropa & Amerika"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "gadget",
+    "parentSlug": "teknologi",
+    "name": "Gadget"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "keuangan",
+    "parentSlug": "ekonomi",
+    "name": "Keuangan"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "sains",
+    "parentSlug": "teknologi",
+    "name": "Sains"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "commercial",
+    "parentSlug": "otomotif",
+    "name": "Commercial"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "lainnya",
+    "parentSlug": "gaya-hidup",
+    "name": "Lainnya"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "trends",
+    "parentSlug": "gaya-hidup",
+    "name": "Trends"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "food",
+    "parentSlug": "gaya-hidup",
+    "name": "Food"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "info-politik",
+    "parentSlug": "nasional",
+    "name": "Info Politik"
+  },
+  {
+    "portalKey": "cnn-indonesia",
+    "slug": "sekolah",
+    "parentSlug": "edukasi",
+    "name": "Sekolah"
+  }
+]

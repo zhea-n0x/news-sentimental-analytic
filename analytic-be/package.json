@@ -6,10 +6,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "bson": "^7.3.3",
     "cheerio": "^1.2.0",
     "croner": "^11.0.0",
-    "hono": "^4.13.14",
-    "mongodb": "^7.8.0"
+    "hono": "^4.13.14"
   },
   "devDependencies": {
     "@types/bun": "latest",

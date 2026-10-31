@@ -1,26 +1,77 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* Mantine owns colors and typography on this page (see layout.tsx). */
+
+/*
+ * Category colors (--viz-cat-N): 13 hues, ordered so neighbours stay apart.
+ * Validated for adjacent-pair separation in both modes, but 13 hues is past
+ * what color alone can carry: names are always shown as labels, in the legend
+ * and in tooltips too.
+ *
+ * Chart tokens. Sentiment is an ordered scale, so it uses a diverging pair
+ * (blue positive / red negative) with a gray midpoint. Sources use categorical
+ * slots that avoid blue and red, so a source color is never mistaken for a
+ * sentiment color.
+ */
+.viz-root {
+  --viz-surface: #fcfcfb;
+  --viz-ink: #0b0b0b;
+  --viz-ink-2: #52514e;
+  --viz-muted: #898781;
+  --viz-grid: #e1e0d9;
+  --viz-axis: #c3c2b7;
+  --viz-pos: #2a78d6;
+  --viz-neu: #c3c2b7;
+  --viz-neg: #e34948;
+  --viz-src-1: #eb6834;
+  --viz-src-2: #1baf7a;
+  --viz-src-3: #6250d6;
+  --viz-cat-1: #6250d6;
+  --viz-cat-2: #eda100;
+  --viz-cat-3: #d6336c;
+  --viz-cat-4: #008300;
+  --viz-cat-5: #1fa7c9;
+  --viz-cat-6: #b45f06;
+  --viz-cat-7: #9c36b5;
+  --viz-cat-8: #8fb300;
+  --viz-cat-9: #3b5bdb;
+  --viz-cat-10: #00998a;
+  --viz-cat-11: #e8590c;
+  --viz-cat-12: #e87ba4;
+  --viz-cat-13: #4c9be8;
+}
+:root[data-mantine-color-scheme="dark"] .viz-root {
+  --viz-surface: #1a1a19;
+  --viz-ink: #f0efec;
+  --viz-ink-2: #c3c2b7;
+  --viz-muted: #898781;
+  --viz-grid: #2c2c2a;
+  --viz-axis: #383835;
+  --viz-pos: #3987e5;
+  --viz-neu: #898781;
+  --viz-neg: #e66767;
+  --viz-src-1: #d95926;
+  --viz-src-2: #199e70;
+  --viz-src-3: #9085e9;
+  --viz-cat-1: #9085e9;
+  --viz-cat-2: #c98500;
+  --viz-cat-3: #e0558a;
+  --viz-cat-4: #2a8f3a;
+  --viz-cat-5: #2a9fbd;
+  --viz-cat-6: #c4701a;
+  --viz-cat-7: #bf62d4;
+  --viz-cat-8: #7f9a17;
+  --viz-cat-9: #6f8cf0;
+  --viz-cat-10: #1f9d8e;
+  --viz-cat-11: #d4561c;
+  --viz-cat-12: #c46aa0;
+  --viz-cat-13: #4c97e0;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+.news-card {
+  transition: border-color 120ms ease, box-shadow 120ms ease;
 }
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.news-card:hover {
+  border-color: var(--mantine-color-gray-5);
+  box-shadow: var(--mantine-shadow-xs);
 }

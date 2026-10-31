@@ -1,4 +1,4 @@
-import type { ObjectId } from 'mongodb'
+// Documents as stored in db-sample (mongoexport files). `_id` is kept as a 24-character hex string.
 
 export interface CategoryRef {
   name: string
@@ -12,7 +12,7 @@ export interface PortalRef {
 }
 
 export interface Portal extends PortalRef {
-  _id?: ObjectId
+  _id?: string
   indexUrl: string
   createdAt: Date
   updatedAt: Date
@@ -20,7 +20,7 @@ export interface Portal extends PortalRef {
 }
 
 export interface Category extends CategoryRef {
-  _id?: ObjectId
+  _id?: string
   portalKey: string
   // null for a top-level category, otherwise the slug of its parent category
   parentSlug: string | null
@@ -29,7 +29,7 @@ export interface Category extends CategoryRef {
 }
 
 export interface Article {
-  _id?: ObjectId
+  _id?: string
   url: string
   externalId: string | null
   portal: PortalRef
@@ -46,6 +46,22 @@ export interface Article {
   publishedAt: Date | null
   wordCount: number
   scrapedAt: Date
+  // Set once Gemma has analysed the article
+  sentiment?: ArticleSentiment | null
+  // Failed analysis attempts; articles are not retried after MAX_SENTIMENT_ATTEMPTS
+  sentimentAttempts?: number
+}
+
+export type SentimentLabel = 'positive' | 'neutral' | 'negative'
+
+export interface ArticleSentiment {
+  label: SentimentLabel
+  // -1 (very negative) to 1 (very positive)
+  score: number
+  // One short sentence from the model explaining the label
+  reason: string
+  model: string
+  analyzedAt: Date
 }
 
 export interface SkippedUrl {
@@ -58,7 +74,7 @@ export interface SkippedUrl {
 export type ScrapeTrigger = 'cron' | 'manual' | 'startup'
 
 export interface ScrapeRun {
-  _id?: ObjectId
+  _id?: string
   portalKey: string
   trigger: ScrapeTrigger
   status: 'running' | 'success' | 'failed'

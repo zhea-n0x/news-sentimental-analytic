@@ -1,0 +1,140 @@
+{
+  "database": "news_sentiment",
+  "source": "mongodb://127.0.0.1:27017",
+  "createdAt": "2026-10-31T07:38:17.864Z",
+  "collections": {
+    "skipped_urls": {
+      "documents": 60,
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "url": 1
+          },
+          "name": "url_1",
+          "unique": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "createdAt": 1
+          },
+          "name": "createdAt_1",
+          "expireAfterSeconds": 1209600
+        }
+      ]
+    },
+    "categories": {
+      "documents": 470,
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "portalKey": 1,
+            "parentSlug": 1,
+            "slug": 1
+          },
+          "name": "portalKey_1_parentSlug_1_slug_1",
+          "unique": true
+        }
+      ]
+    },
+    "articles": {
+      "documents": 3647,
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "url": 1
+          },
+          "name": "url_1",
+          "unique": true
+        },
+        {
+          "v": 2,
+          "key": {
+            "publishedAt": -1
+          },
+          "name": "publishedAt_-1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "portal.key": 1,
+            "publishedAt": -1
+          },
+          "name": "portal.key_1_publishedAt_-1"
+        },
+        {
+          "v": 2,
+          "key": {
+            "category.slug": 1,
+            "publishedAt": -1
+          },
+          "name": "category.slug_1_publishedAt_-1"
+        }
+      ]
+    },
+    "portals": {
+      "documents": 12,
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "key": 1
+          },
+          "name": "key_1",
+          "unique": true
+        }
+      ]
+    },
+    "scrape_runs": {
+      "documents": 242,
+      "indexes": [
+        {
+          "v": 2,
+          "key": {
+            "_id": 1
+          },
+          "name": "_id_"
+        },
+        {
+          "v": 2,
+          "key": {
+            "portalKey": 1,
+            "startedAt": -1
+          },
+          "name": "portalKey_1_startedAt_-1"
+        }
+      ]
+    }
+  }
+}

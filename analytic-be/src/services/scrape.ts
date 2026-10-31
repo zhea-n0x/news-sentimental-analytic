@@ -1,5 +1,15 @@
 import { config } from '../config'
-import { articles, categories, portals, scrapeRuns, skippedUrls } from '../db'
+import {
+  addSkippedUrl,
+  finishScrapeRun,
+  hasArticle,
+  insertArticle,
+  isSkippedUrl,
+  markPortalScraped,
+  startScrapeRun,
+  upsertCategory,
+  upsertPortal,
+} from '../db'
 import { titleCase } from '../lib/html'
 import { cleanText, mapLimit, recentDates, slugify } from '../lib/utils'
 import { scrapers } from '../scrapers'
@@ -38,19 +48,11 @@ export async function scrapePortal(scraper: PortalScraper, trigger: ScrapeTrigge
     errors: [],
     startedAt: new Date(),
   }
-  const { insertedId } = await scrapeRuns.insertOne(run)
+  const runId = startScrapeRun(run)
   console.log(`[scrape:${portal.key}] started (${trigger}) for ${run.dates.join(', ')}`)
 
   try {
-    const now = new Date()
-    await portals.updateOne(
-      { key: portal.key },
-      {
-        $set: { name: portal.name, url: portal.url, indexUrl: portal.indexUrl, updatedAt: now },
-        $setOnInsert: { createdAt: now },
-      },
-      { upsert: true },
-    )
+    upsertPortal({ key: portal.key, name: portal.name, url: portal.url, indexUrl: portal.indexUrl })
 
     // Feeds and sitemaps reach back days or months; only keep what falls inside the lookback window
     const cutoff = Date.now() - (config.lookbackDays + 1) * 86_400_000
@@ -65,11 +67,9 @@ export async function scrapePortal(scraper: PortalScraper, trigger: ScrapeTrigge
 
     // Skip articles already stored (or known not to be articles) before spending a request on them
     const urls = [...listed.keys()]
-    const [existing, ignored] = await Promise.all([
-      articles.find({ url: { $in: urls } }, { projection: { url: 1 } }).toArray(),
-      skippedUrls.find({ url: { $in: urls } }, { projection: { url: 1 } }).toArray(),
-    ])
-    const known = new Set([...existing, ...ignored].map((doc) => doc.url))
+    const existing = urls.filter(hasArticle)
+    const ignored = urls.filter(isSkippedUrl)
+    const known = new Set([...existing, ...ignored])
     run.skipped = existing.length
     run.ignored = ignored.length
     const fresh = [...listed.values()].filter((item) => !known.has(item.url))
@@ -78,21 +78,16 @@ export async function scrapePortal(scraper: PortalScraper, trigger: ScrapeTrigge
       try {
         const scraped = await scraper.scrapeArticle(item.url)
         const doc = toArticle(scraper, item, scraped)
-        const res = await articles.updateOne({ url: doc.url }, { $setOnInsert: doc }, { upsert: true })
-        if (res.upsertedCount) {
+        if (insertArticle(doc)) {
           run.inserted++
-          await saveCategories(portal.key, doc.category, doc.subcategory)
+          saveCategories(portal.key, doc.category, doc.subcategory)
         } else {
           run.skipped++
         }
       } catch (err) {
         if (err instanceof SkipArticle) {
           run.ignored++
-          await skippedUrls.updateOne(
-            { url: item.url },
-            { $setOnInsert: { url: item.url, portalKey: portal.key, reason: err.message, createdAt: new Date() } },
-            { upsert: true },
-          )
+          addSkippedUrl({ url: item.url, portalKey: portal.key, reason: err.message, createdAt: new Date() })
         } else {
           run.failed++
           run.errors.push({ url: item.url, message: errorMessage(err) })
@@ -102,20 +97,20 @@ export async function scrapePortal(scraper: PortalScraper, trigger: ScrapeTrigge
     })
 
     run.status = 'success'
-    await portals.updateOne({ key: portal.key }, { $set: { lastScrapedAt: new Date() } })
+    markPortalScraped(portal.key)
   } catch (err) {
     run.status = 'failed'
     run.errors.push({ message: errorMessage(err) })
   } finally {
     run.finishedAt = new Date()
-    await scrapeRuns.replaceOne({ _id: insertedId }, run)
+    finishScrapeRun(runId, run)
     running.delete(portal.key)
     console.log(
       `[scrape:${portal.key}] ${run.status}: listed=${run.listed} inserted=${run.inserted} skipped=${run.skipped} ignored=${run.ignored} failed=${run.failed}`,
     )
   }
 
-  return { ...run, _id: insertedId }
+  return { ...run, _id: runId }
 }
 
 function toArticle(scraper: PortalScraper, item: ListedArticle, scraped: ScrapedArticle): Article {
@@ -152,17 +147,9 @@ function toCategoryRef(value: string | null | undefined): CategoryRef | null {
   return slug ? { name, slug } : null
 }
 
-async function saveCategories(portalKey: string, category: CategoryRef, subcategory: CategoryRef | null) {
-  const now = new Date()
-  const upsert = (ref: CategoryRef, parentSlug: string | null) =>
-    categories.updateOne(
-      { portalKey, parentSlug, slug: ref.slug },
-      { $set: { name: ref.name, updatedAt: now }, $setOnInsert: { createdAt: now } },
-      { upsert: true },
-    )
-
-  await upsert(category, null)
-  if (subcategory) await upsert(subcategory, category.slug)
+function saveCategories(portalKey: string, category: CategoryRef, subcategory: CategoryRef | null) {
+  upsertCategory(portalKey, category, null)
+  if (subcategory) upsertCategory(portalKey, subcategory, category.slug)
 }
 
 function errorMessage(err: unknown) {

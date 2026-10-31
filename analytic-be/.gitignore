@@ -3,3 +3,6 @@ node_modules/
 
 # env
 .env
+
+# old local MongoDB data (no longer used; safe to delete)
+.local-db/

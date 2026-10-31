@@ -4,21 +4,25 @@ import { listArticles } from './articles'
 
 export const portalRoutes = new Hono()
 
-async function withCategories(portalKey: string) {
-  const [all, counts] = await Promise.all([
-    categories.find({ portalKey }).sort({ name: 1 }).toArray(),
-    articles
-      .aggregate<{ _id: { category: string; subcategory: string | null }; count: number }>([
-        { $match: { 'portal.key': portalKey } },
-        { $group: { _id: { category: '$category.slug', subcategory: '$subcategory.slug' }, count: { $sum: 1 } } },
-      ])
-      .toArray(),
-  ])
+function withCategories(portalKey: string) {
+  const all = [...categories.values()]
+    .filter((c) => c.portalKey === portalKey)
+    .sort((a, b) => a.name.localeCompare(b.name))
 
+  // Article counts per "category/subcategory" for this portal
+  const counts = new Map<string, number>()
+  for (const a of articles) {
+    if (a.portal.key !== portalKey) continue
+    const key = `${a.category.slug}/${a.subcategory?.slug ?? ''}`
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
   const countOf = (category: string, subcategory?: string) =>
-    counts
-      .filter((c) => c._id.category === category && (subcategory === undefined || c._id.subcategory === subcategory))
-      .reduce((sum, c) => sum + c.count, 0)
+    [...counts]
+      .filter(([key]) => {
+        const [cat, sub] = key.split('/')
+        return cat === category && (subcategory === undefined || sub === subcategory)
+      })
+      .reduce((sum, [, n]) => sum + n, 0)
 
   return all
     .filter((c) => c.parentSlug === null)
@@ -32,21 +36,19 @@ async function withCategories(portalKey: string) {
     }))
 }
 
-portalRoutes.get('/', async (c) => {
-  const list = await portals.find().sort({ name: 1 }).toArray()
-  return c.json(
-    await Promise.all(list.map(async (portal) => ({ ...portal, categories: await withCategories(portal.key) }))),
-  )
+portalRoutes.get('/', (c) => {
+  const list = [...portals.values()].sort((a, b) => a.name.localeCompare(b.name))
+  return c.json(list.map((portal) => ({ ...portal, categories: withCategories(portal.key) })))
 })
 
-portalRoutes.get('/:key', async (c) => {
-  const portal = await portals.findOne({ key: c.req.param('key') })
+portalRoutes.get('/:key', (c) => {
+  const portal = portals.get(c.req.param('key'))
   if (!portal) return c.json({ error: 'Portal not found' }, 404)
-  return c.json({ ...portal, categories: await withCategories(portal.key) })
+  return c.json({ ...portal, categories: withCategories(portal.key) })
 })
 
-portalRoutes.get('/:key/articles', async (c) => {
+portalRoutes.get('/:key/articles', (c) => {
   const key = c.req.param('key')
-  if (!(await portals.countDocuments({ key }, { limit: 1 }))) return c.json({ error: 'Portal not found' }, 404)
+  if (!portals.has(key)) return c.json({ error: 'Portal not found' }, 404)
   return listArticles(c, key)
 })
