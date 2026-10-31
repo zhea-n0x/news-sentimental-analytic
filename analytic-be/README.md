@@ -25,7 +25,7 @@ Note that `robots.txt` on **kompas.com** disallows AI crawlers (ClaudeBot, anthr
 
 ```sh
 bun install
-cp .env.example .env   # set GEMINI_API_KEY
+cp .env.example .env   # Ollama by default; or set GEMMA_PROVIDER=gemini and GEMINI_API_KEY
 bun run dev            # http://localhost:4000
 ```
 
@@ -43,9 +43,12 @@ Off unless `SCRAPE_INTO_DB_SAMPLE=true` (the old `SCRAPE_ENABLED` setting is ign
 
 ### Sentiment analysis
 
-Articles are classified as positive, neutral or negative by Gemma (`GEMMA_MODEL`, default `gemma-4-26b-a4b-it`) through the Gemini API; create a key in [Google AI Studio](https://aistudio.google.com/apikey) and set `GEMINI_API_KEY`.
+Articles are classified as positive, neutral or negative by Gemma (`GEMMA_MODEL`), either on a local [Ollama](https://ollama.com) server or through the Gemini API, chosen by `GEMMA_PROVIDER`:
 
-Analysis runs on demand: when the frontend asks for a filter (`POST /analysis`), the newest articles in that selection without a sentiment are queued (`ANALYSIS_QUEUE_LIMIT`, default 100). A single worker sends them in batches of `GEMMA_BATCH_SIZE` (title, summary and the first `GEMMA_EXCERPT_CHARS` characters of text), spaced to `GEMMA_RPM` requests per minute, retrying rate-limit and server errors. Results (`label`, `score`, `reason`, `model`, `analyzedAt`) are saved to `sentiments.jsonl`, so each article is analysed once. Articles the model fails on are retried at most 3 times per run of the server.
+- `ollama` (the default when `GEMINI_API_KEY` is not set): run `ollama pull gemma4:e4b` and keep Ollama running. Requests go to `OLLAMA_URL` (default `http://localhost:11434`) with a `OLLAMA_NUM_CTX` context window (default 8192); `GEMMA_MODEL` defaults to `gemma4:e4b` and `GEMMA_RPM` is not applied.
+- `gemini`: create a key in [Google AI Studio](https://aistudio.google.com/apikey) and set `GEMINI_API_KEY`; `GEMMA_MODEL` defaults to `gemma-4-26b-a4b-it`.
+
+Analysis runs on demand: when the frontend asks for a filter (`POST /analysis`), the newest articles in that selection without a sentiment are queued (`ANALYSIS_QUEUE_LIMIT`, default 100). A single worker sends them in batches of `GEMMA_BATCH_SIZE` (default 5 with Ollama, 10 with Gemini; title, summary and the first `GEMMA_EXCERPT_CHARS` characters of text), spaced to `GEMMA_RPM` requests per minute, retrying rate-limit and server errors. Results (`label`, `score`, `reason`, `model`, `analyzedAt`) are saved to `sentiments.jsonl`, so each article is analysed once. Articles the model fails on are retried at most 3 times per run of the server.
 
 ### Unified categories
 

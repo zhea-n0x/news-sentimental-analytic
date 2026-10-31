@@ -43,8 +43,11 @@ app.onError((err, c) => {
   return c.json({ error: err.message || 'Internal error' }, 500)
 })
 
-if (!config.gemma.apiKey) {
+if (!config.gemma.configured) {
   console.warn('[sentiment] GEMINI_API_KEY is not set; articles will not be analysed')
+} else {
+  const where = config.gemma.provider === 'ollama' ? `Ollama at ${config.gemma.ollamaUrl}` : 'the Gemini API'
+  console.log(`[sentiment] using ${config.gemma.model} via ${where}`)
 }
 
 // Scraping adds new articles to db-sample's files, so it only runs when explicitly enabled

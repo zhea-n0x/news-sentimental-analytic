@@ -16,7 +16,8 @@ let lastError: string | null = null
 
 export function sentimentStatus() {
   return {
-    configured: Boolean(config.gemma.apiKey),
+    configured: config.gemma.configured,
+    provider: config.gemma.provider,
     model: config.gemma.model,
     pending: queue.length + inFlight,
     running,
@@ -31,7 +32,7 @@ export function sentimentStatus() {
  * Returns how many were not already waiting.
  */
 export function enqueue(ids: string[]) {
-  if (!config.gemma.apiKey || !ids.length) return 0
+  if (!config.gemma.configured || !ids.length) return 0
   const fresh = ids.filter((id) => !queued.has(id))
   const requested = new Set(ids)
   const rest = queue.filter((id) => !requested.has(id))

@@ -107,7 +107,46 @@ function retryDelayMs(body: string) {
 // Gemma 4 thinks before answering unless told not to; turned off if the API rejects the setting
 let sendThinkingConfig = true
 
+/** One reply from the local Ollama server (no rate limit; a CPU-only machine can take minutes per batch). */
+async function generateOllama(prompt: string): Promise<string> {
+  const { ollamaUrl, ollamaNumCtx, model } = config.gemma
+
+  for (let attempt = 1; ; attempt++) {
+    const res = await fetch(`${ollamaUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: prompt }],
+        stream: false,
+        think: false,
+        options: { temperature: 0, num_ctx: ollamaNumCtx },
+      }),
+      signal: AbortSignal.timeout(600_000),
+    }).catch((err: unknown) => {
+      if (attempt >= MAX_ATTEMPTS) {
+        throw new GemmaError(`Ollama request to ${ollamaUrl} failed (is \`ollama serve\` running?): ${String(err)}`)
+      }
+      return null
+    })
+
+    if (res?.ok) {
+      const data = (await res.json()) as { message?: { content?: string } }
+      return data.message?.content ?? ''
+    }
+
+    const body = res ? await res.text() : ''
+    // 404 means the model is not pulled; retrying will not help
+    const retryable = !res || res.status >= 500
+    if (!retryable || attempt >= MAX_ATTEMPTS) {
+      throw new GemmaError(`Ollama ${res?.status ?? 'network error'}: ${body.slice(0, 300)}`, res?.status)
+    }
+    await Bun.sleep(2 ** attempt * 1000)
+  }
+}
+
 async function generate(prompt: string): Promise<string> {
+  if (config.gemma.provider === 'ollama') return generateOllama(prompt)
   const { apiKey, model } = config.gemma
   if (!apiKey) throw new GemmaError('GEMINI_API_KEY is not set')
 

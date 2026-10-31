@@ -5,6 +5,8 @@ const API_URL = process.env.ANALYTIC_API_URL ?? "http://localhost:4000";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  // let `next dev` serve its client JS through cloudflared quick tunnels
+  allowedDevOrigins: ["*.trycloudflare.com"],
   experimental: {
     agentFeedback: true,
   },

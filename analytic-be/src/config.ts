@@ -25,18 +25,29 @@ export const config = {
   concurrency: Number(env.SCRAPE_CONCURRENCY ?? 3),
   requestDelayMs: Number(env.SCRAPE_DELAY_MS ?? 500),
 
-  // Sentiment analysis with Gemma through the Gemini API (Google AI Studio)
-  gemma: {
-    apiKey: env.GEMINI_API_KEY ?? '',
-    apiUrl: env.GEMMA_API_URL || 'https://generativelanguage.googleapis.com/v1beta',
-    model: env.GEMMA_MODEL ?? 'gemma-4-26b-a4b-it',
-    // Articles per request; each article is sent as title, description and the start of the text
-    batchSize: Math.max(1, Number(env.GEMMA_BATCH_SIZE ?? 10)),
-    // Requests per minute, kept under the API key's rate limit
-    requestsPerMinute: Math.max(1, Number(env.GEMMA_RPM ?? 15)),
-    // Characters of article text sent per article
-    excerptChars: Number(env.GEMMA_EXCERPT_CHARS ?? 700),
-  },
+  // Sentiment analysis with Gemma: a local Ollama server, or the Gemini API (Google AI Studio).
+  // Defaults to Ollama unless GEMINI_API_KEY is set
+  gemma: (() => {
+    const apiKey = env.GEMINI_API_KEY ?? ''
+    const provider = (env.GEMMA_PROVIDER || (apiKey ? 'gemini' : 'ollama')) as 'ollama' | 'gemini'
+    return {
+      provider,
+      configured: provider === 'ollama' || Boolean(apiKey),
+      apiKey,
+      apiUrl: env.GEMMA_API_URL || 'https://generativelanguage.googleapis.com/v1beta',
+      ollamaUrl: (env.OLLAMA_URL || 'http://localhost:11434').replace(/\/$/, ''),
+      // Context window Ollama loads the model with; its 4096 default is too small for a batch
+      ollamaNumCtx: Number(env.OLLAMA_NUM_CTX ?? 8192),
+      model: env.GEMMA_MODEL || (provider === 'ollama' ? 'gemma4:e4b' : 'gemma-4-26b-a4b-it'),
+      // Articles per request; each article is sent as title, description and the start of the text.
+      // Smaller for Ollama so one request stays well under the timeout on a laptop
+      batchSize: Math.max(1, Number(env.GEMMA_BATCH_SIZE || (provider === 'ollama' ? 5 : 10))),
+      // Requests per minute, kept under the API key's rate limit
+      requestsPerMinute: Math.max(1, Number(env.GEMMA_RPM ?? 15)),
+      // Characters of article text sent per article
+      excerptChars: Number(env.GEMMA_EXCERPT_CHARS ?? 700),
+    }
+  })(),
   // Most articles one filter request queues for analysis (newest first)
   analysisBatchLimit: Number(env.ANALYSIS_QUEUE_LIMIT ?? 100),
 }
