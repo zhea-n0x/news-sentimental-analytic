@@ -11,6 +11,12 @@ export function slugify(value: string) {
     .replace(/^-+|-+$/g, '')
 }
 
+/** Normalized title used to spot the same story under another URL; null when too short to be distinctive. */
+export function titleKey(title: string | null | undefined) {
+  const key = slugify(title ?? '')
+  return key.split('-').length >= 4 ? key : null
+}
+
 /** Normalized URL used as the unique key for an article: https, no query string or hash. */
 export function canonicalUrl(value: string, base?: string) {
   const url = new URL(value, base)

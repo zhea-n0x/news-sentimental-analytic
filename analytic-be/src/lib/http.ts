@@ -1,10 +1,13 @@
-const USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36'
+import { config } from '../config'
+import { assertAllowed } from './robots'
+import { waitForTurn } from './throttle'
 
 export class HttpError extends Error {
   constructor(
     readonly status: number,
     readonly url: string,
+    // From a Retry-After header on 429/503
+    readonly retryAfterMs: number | null = null,
   ) {
     super(`HTTP ${status} for ${url}`)
   }
@@ -31,24 +34,39 @@ export async function fetchPage(url: string, options?: FetchOptions) {
   }
 }
 
+/**
+ * GETs a page politely: robots.txt must allow it (RobotsDisallowedError otherwise), requests to the same
+ * site are spaced out, and 429/503 responses are retried after the server's Retry-After.
+ */
 export async function fetchHtml(url: string, { retries = 2, timeoutMs = 15_000 }: FetchOptions = {}) {
-  const headers = { 'User-Agent': USER_AGENT, 'Accept-Language': 'id-ID,id;q=0.9,en;q=0.8' }
+  await assertAllowed(url)
+  const headers = { 'User-Agent': config.userAgent, 'Accept-Language': 'id-ID,id;q=0.9,en;q=0.8' }
 
   for (let attempt = 0; ; attempt++) {
     try {
+      await waitForTurn(url)
       const res = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) })
       // Bot-protection challenges (AWS WAF answers 202 with an empty body) are not content; never try to bypass them
       if (res.headers.get('x-amzn-waf-action') || res.headers.get('cf-mitigated')) {
         throw new BlockedError(url)
       }
-      if (!res.ok) throw new HttpError(res.status, url)
+      if (!res.ok) throw new HttpError(res.status, url, parseRetryAfter(res.headers.get('retry-after')))
       return await res.text()
     } catch (err) {
       // 4xx (other than 429) and bot challenges will not fix themselves, so do not retry them
       const permanent =
         err instanceof BlockedError || (err instanceof HttpError && err.status < 500 && err.status !== 429)
       if (permanent || attempt >= retries) throw err
-      await Bun.sleep(1000 * 2 ** attempt)
+      const retryAfter = err instanceof HttpError ? err.retryAfterMs : null
+      await Bun.sleep(Math.min(retryAfter ?? 2000 * 2 ** attempt, 60_000))
     }
   }
+}
+
+function parseRetryAfter(value: string | null) {
+  if (!value) return null
+  const seconds = Number(value)
+  if (Number.isFinite(seconds)) return seconds * 1000
+  const date = Date.parse(value)
+  return Number.isNaN(date) ? null : Math.max(0, date - Date.now())
 }
