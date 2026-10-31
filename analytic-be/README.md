@@ -39,7 +39,7 @@ The data comes from `../db-sample` (`DB_SAMPLE_DIR`), a `mongoexport` backup wit
 
 ### Scraping (optional)
 
-Off unless `SCRAPE_ENABLED=true`. When on, the scraper runs hourly (and once at startup unless `SCRAPE_ON_START=false`) and writes into `db-sample` itself: new articles and skipped URLs are appended to `articles.json` / `skipped_urls.json`, `portals.json` and `categories.json` are rewritten, runs are appended to `scrape_runs.json`, and `manifest.json` counts are updated. The files stay in `mongoexport` format, so `db-sample/restore.ts` can still load them into MongoDB.
+Off unless `SCRAPE_INTO_DB_SAMPLE=true` (the old `SCRAPE_ENABLED` setting is ignored). When on, the scraper runs hourly (and once at startup unless `SCRAPE_ON_START=false`) and writes into `db-sample` itself: new articles and skipped URLs are appended to `articles.json` / `skipped_urls.json`, `portals.json` and `categories.json` are rewritten, runs are appended to `scrape_runs.json`, and `manifest.json` counts are updated. The files stay in `mongoexport` format, so `db-sample/restore.ts` can still load them into MongoDB.
 
 ### Sentiment analysis
 
@@ -80,7 +80,7 @@ Each portal names its sections differently, so `src/taxonomy.ts` maps every `por
 | GET    | `/portals/:key/articles` | Articles of one portal (same query options as `/articles`)                                    |
 | GET    | `/articles`              | List (no content). Query: `portal` (key, or comma-separated keys), `category`, `subcategory` (slugs), `q`, `page`, `limit` |
 | GET    | `/articles/:id`          | Full article including content                                                                |
-| POST   | `/scrape/run?portal=key` | Start a scrape now (all portals if `portal` omitted); returns 202. `409` while `SCRAPE_ENABLED` is off |
+| POST   | `/scrape/run?portal=key` | Start a scrape now (all portals if `portal` omitted); returns 202. `409` while `SCRAPE_INTO_DB_SAMPLE` is off |
 | GET    | `/scrape/runs`           | Recent scrape runs. Query: `portal`, `limit`                                                  |
 | GET    | `/analysis/categories`   | Unified category tree with article counts and portals. Query: `days` (1, 3, 7, 30)            |
 | POST   | `/analysis`              | Dashboard for a filter (see below)                                                            |

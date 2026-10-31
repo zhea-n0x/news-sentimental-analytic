@@ -9,7 +9,7 @@ export const scrapeRoutes = new Hono()
 // Starts a scrape in the background; poll GET /scrape/runs for the result
 scrapeRoutes.post('/run', (c) => {
   if (!config.scrapeEnabled) {
-    return c.json({ error: 'Scraping is off. Set SCRAPE_ENABLED=true to add new articles to db-sample.' }, 409)
+    return c.json({ error: 'Scraping is off. Set SCRAPE_INTO_DB_SAMPLE=true to add new articles to db-sample.' }, 409)
   }
   const key = c.req.query('portal')
   const targets = key ? [getScraper(key)].filter((s) => s !== undefined) : scrapers

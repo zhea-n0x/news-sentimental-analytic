@@ -13,8 +13,9 @@ export const config = {
   // Gemma's results, one JSON line per article; defaults to <DB_SAMPLE_DIR>/sentiments.jsonl
   sentimentFile: env.SENTIMENT_FILE || '',
 
-  // The scraper adds new articles to db-sample's files. Off unless SCRAPE_ENABLED=true.
-  scrapeEnabled: flag(env.SCRAPE_ENABLED, false),
+  // The scraper writes new articles into db-sample's files, so it needs its own explicit opt-in.
+  // (The old SCRAPE_ENABLED setting is ignored: it was written for MongoDB.)
+  scrapeEnabled: flag(env.SCRAPE_INTO_DB_SAMPLE, false),
   // Every hour on the hour, evaluated in `timezone`
   scrapeCron: env.SCRAPE_CRON ?? '0 * * * *',
   timezone: env.SCRAPE_TIMEZONE ?? 'Asia/Jakarta',

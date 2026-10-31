@@ -3,7 +3,7 @@
 // - Articles, portals, categories, scrape runs and skipped URLs come from db-sample's mongoexport files.
 // - Gemma's results are appended to sentiments.jsonl (one JSON line per analysed article), so the
 //   backup's own files are never rewritten by analysis.
-// - Only the scraper (off unless SCRAPE_ENABLED=true) adds to the backup files themselves.
+// - Only the scraper (off unless SCRAPE_INTO_DB_SAMPLE=true) adds to the backup files themselves.
 import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { ObjectId } from 'bson'
@@ -133,7 +133,7 @@ export function recordSentimentFailure(id: string) {
   if (article) article.sentimentAttempts = (article.sentimentAttempts ?? 0) + 1
 }
 
-// ---- Scraper writes (only when SCRAPE_ENABLED=true) ----
+// ---- Scraper writes (only when SCRAPE_INTO_DB_SAMPLE=true) ----
 
 export const hasArticle = (url: string) => articleUrls.has(url)
 export const isSkippedUrl = (url: string) => skippedUrls.has(url)
