@@ -9,7 +9,9 @@
     "bson": "^7.3.3",
     "cheerio": "^1.2.0",
     "croner": "^11.0.0",
-    "hono": "^4.13.14"
+    "hono": "^4.13.14",
+    "mongodb": "^7.8.0",
+    "robots-parser": "^3.0.1"
   },
   "devDependencies": {
     "@types/bun": "latest",
