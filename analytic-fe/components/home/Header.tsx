@@ -3,23 +3,15 @@
 import {
   ActionIcon,
   Autocomplete,
-  Avatar,
   Box,
   Group,
   Indicator,
-  Menu,
-  Text,
-  UnstyledButton,
+  Text
 } from '@mantine/core';
 import {
   IconBell,
   IconChartBar,
-  IconChevronDown,
-  IconHelp,
-  IconLogout,
-  IconSearch,
-  IconSettings,
-  IconUser,
+  IconSearch
 } from '@tabler/icons-react';
 
 interface Props {

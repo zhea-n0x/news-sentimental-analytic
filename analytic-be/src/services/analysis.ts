@@ -1,7 +1,6 @@
 import { articles, dataEnd } from '../db'
 import { classify, expandSelection, focusOf, NODE_BY_ID, rootOf, TAXONOMY } from '../taxonomy'
 import type { Article, ArticleSentiment, PortalRef, SentimentLabel } from '../types'
-import { MAX_SENTIMENT_ATTEMPTS } from './sentiment'
 
 export const PERIODS = [1, 3, 7, 30] as const
 const HOUR = 3_600_000
@@ -47,8 +46,6 @@ export interface AnalysisSummary {
     series: { key: string; name: string; points: (Counts & { analyzed: number })[] }[]
   }
   articles: ArticleCard[]
-  /** Ids of articles in the selection that still need analysis, newest first. */
-  unanalyzed: string[]
 }
 
 const emptyCounts = (): Counts => ({ positive: 0, neutral: 0, negative: 0 })
@@ -184,11 +181,6 @@ export function summarize(rows: ArticleRow[], selection: string[], days: number,
   if (first < 0) first = last = -1
   const keep = <T,>(list: T[]) => (first < 0 ? [] : list.slice(first, last + 1))
 
-  const unanalyzed = selected
-    .filter((r) => !r.sentiment && (r.sentimentAttempts ?? 0) < MAX_SENTIMENT_ATTEMPTS)
-    .sort((a, b) => time(b) - time(a))
-    .map((r) => String(r._id))
-
   return {
     period: { days, from: from.toISOString(), to: to.toISOString() },
     focus: focusNode ? { id: focusNode.id, name: focusNode.name, hasChildren: Boolean(focusNode.children?.length) } : null,
@@ -201,7 +193,6 @@ export function summarize(rows: ArticleRow[], selection: string[], days: number,
       series: series.map((s) => ({ ...s, points: keep(s.points) })),
     },
     articles: pickDiverse(selected, 12).map(toCard),
-    unanalyzed,
   }
 }
 

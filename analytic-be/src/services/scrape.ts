@@ -19,6 +19,7 @@ import { scrapers } from '../scrapers'
 import { SkipArticle, type ListedArticle, type PortalScraper, type ScrapedArticle } from '../scrapers/types'
 import type { Article, CategoryRef, ScrapeRun, ScrapeTrigger } from '../types'
 import { checkPortalAccess, saveAccess, type AccessCheck } from './access'
+import { enqueueArticle } from './sentiment'
 
 const UNCATEGORIZED: CategoryRef = { name: 'Uncategorized', slug: 'uncategorized' }
 
@@ -103,8 +104,11 @@ export async function scrapePortal(scraper: PortalScraper, trigger: ScrapeTrigge
         const scraped = await scraper.scrapeArticle(item.url)
         blockedInARow = 0
         const doc = toArticle(scraper, item, scraped)
-        if (await insertArticle(doc)) {
+        const id = await insertArticle(doc)
+        if (id) {
           run.inserted++
+          // Saved, so it can go on top of the analysis queue
+          await enqueueArticle(id)
           await saveCategories(portal.key, doc.category, doc.subcategory)
         } else {
           run.skipped++

@@ -18,7 +18,7 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconArrowLeft, IconFilter } from '@tabler/icons-react';
-import type { AnalyzeMode, ArticleCard } from '@/lib/api';
+import type { ArticleCard } from '@/lib/api';
 import { categoryLabel, leavesOf } from '@/lib/taxonomy';
 import { AnalysisStatus, ServiceError } from './AnalysisStatus';
 import { CategoryDetail } from './CategoryDetail';
@@ -33,7 +33,7 @@ import { formatDateTime } from './formatDate';
 import { Header } from './Header';
 import { NewsDetail } from './NewsDetail';
 import { Overview } from './Overview';
-import { useAnalysis, useCategories } from './useDashboardData';
+import { useAnalysis, useAnalysisStatus, useCategories } from './useDashboardData';
 import { useNow } from './useNow';
 
 const USER = { name: 'User' };
@@ -58,20 +58,13 @@ export function Home() {
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [article, setArticle] = useState<ArticleCard | null>(null);
   const [drawerOpened, drawer] = useDisclosure(false);
-  // "Analyse all" for the current selection; reset whenever the filters change
-  const [analyzeRequest, setAnalyzeRequest] = useState<{ key: string; mode: AnalyzeMode; nonce: number }>({
-    key: '',
-    mode: 'auto',
-    nonce: 0,
-  });
   const [retry, setRetry] = useState(0);
 
-  const filterKey = `${filters.period}|${filters.categories.join(',')}`;
-  const mode = analyzeRequest.key === filterKey ? analyzeRequest.mode : 'auto';
-  const nonce = analyzeRequest.key === filterKey ? analyzeRequest.nonce : 0;
-
   const categories = useCategories(filters.period, retry);
-  const analysis = useAnalysis(filters.categories, filters.period, mode, nonce + retry * 1000);
+  // Gemma works through the backend's queue on its own; new results or new articles reload the dashboard
+  const status = useAnalysisStatus(retry).data;
+  const refresh = status ? `${status.articles.analyzed}|${status.articles.total}` : '';
+  const analysis = useAnalysis(filters.categories, filters.period, retry, refresh);
   const taxonomy = categories.index;
   const data = analysis.data;
 
@@ -186,14 +179,7 @@ export function Home() {
               </Group>
             </Group>
 
-            {data && (
-              <AnalysisStatus
-                data={data}
-                onAnalyzeAll={() =>
-                  setAnalyzeRequest((r) => ({ key: filterKey, mode: 'all', nonce: r.nonce + 1 }))
-                }
-              />
-            )}
+            {data && <AnalysisStatus data={data} status={status} />}
 
             <ScrollArea
               style={{ flex: 1, minHeight: 0 }}
@@ -272,7 +258,7 @@ export function Home() {
 
       <NewsDetail
         article={article}
-        model={data?.analysis.model}
+        model={status?.model}
         onClose={() => setArticle(null)}
       />
     </Flex>

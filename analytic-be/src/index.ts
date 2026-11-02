@@ -10,6 +10,7 @@ import { articleRoutes } from './routes/articles'
 import { portalRoutes } from './routes/portals'
 import { scrapeRoutes } from './routes/scrape'
 import { scrapeAllPortals } from './services/scrape'
+import { startSentimentWorker } from './services/sentiment'
 
 // The data comes from MongoDB, or from the db-sample folder when MongoDB cannot be reached; it is read into memory here
 await loadDb()
@@ -49,6 +50,9 @@ if (!config.gemma.configured) {
   const where = config.gemma.provider === 'ollama' ? `Ollama at ${config.gemma.ollamaUrl}` : 'the Gemini API'
   console.log(`[sentiment] using ${config.gemma.model} via ${where}`)
 }
+
+// Analysis works through the Redis queue on its own; it is filled before the first scrape pushes new articles onto it
+if (dbState === 'ready') await startSentimentWorker()
 
 // Scraping writes into MongoDB (unless SCRAPE_ENABLED=false); into db-sample's files only when explicitly enabled
 if (dbState === 'ready' && scrapingEnabled()) {

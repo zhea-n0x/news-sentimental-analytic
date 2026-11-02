@@ -69,6 +69,9 @@ export const config = {
       excerptChars: Number(env.GEMMA_EXCERPT_CHARS || (provider === 'ollama' ? 30000 : 700)),
     }
   })(),
-  // Most articles one filter request queues for analysis (newest first)
-  analysisBatchLimit: Number(env.ANALYSIS_QUEUE_LIMIT ?? 100),
+  // The analysis queue: a Redis list of article ids, newest on top (see src/services/queue.ts)
+  redisUrl: env.REDIS_URL || 'redis://127.0.0.1:6379',
+  analysisQueueKey: env.ANALYSIS_QUEUE_KEY || 'news_sentiment:analysis:queue',
+  // How long to wait for Redis before retrying in the background
+  redisConnectTimeoutMs: Number(env.REDIS_CONNECT_TIMEOUT_MS || 3000),
 }

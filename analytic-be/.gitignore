@@ -6,3 +6,5 @@ node_modules/
 
 # old local MongoDB data (no longer used; safe to delete)
 .local-db/
+
+bun.lock

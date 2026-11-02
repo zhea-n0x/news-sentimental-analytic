@@ -333,29 +333,29 @@ export function recentTitleKeys(portalKey: string, since: Date) {
 /** Two writers inserting the same unique key at once: the other one won, which is fine. */
 const isDuplicateKey = (err: unknown) => err instanceof MongoServerError && err.code === 11000
 
-/** Adds a scraped article unless its URL is already stored. Returns whether it was new. */
-export async function insertArticle(doc: Article) {
-  if (articleUrls.has(doc.url)) return false
+/** Adds a scraped article unless its URL is already stored. Returns the new article's id, or null if it was known. */
+export async function insertArticle(doc: Article): Promise<string | null> {
+  if (articleUrls.has(doc.url)) return null
   const stored: StoredArticle = { ...doc, _id: newId() }
   if (!mongo) {
     addArticle(stored)
     appendDocuments(dbDir(), 'articles', [stored])
-    return true
+    return stored._id
   }
   const { content: _content, ...cached } = stored
   addArticle(cached)
   try {
     const res = await mongo.articles.updateOne({ url: doc.url }, { $setOnInsert: toMongo(stored) }, { upsert: true })
-    if (res.upsertedCount) return true
+    if (res.upsertedCount) return stored._id
   } catch (err) {
     dropArticle(cached)
-    if (isDuplicateKey(err)) return false
+    if (isDuplicateKey(err)) return null
     throw err
   }
   // Another process stored this URL first; it is picked up on the next start
   dropArticle(cached)
   articleUrls.add(doc.url)
-  return false
+  return null
 }
 
 export async function addSkippedUrl(entry: SkippedUrl) {

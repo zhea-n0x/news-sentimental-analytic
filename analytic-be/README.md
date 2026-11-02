@@ -29,6 +29,8 @@ cp .env.example .env   # Ollama by default; or set GEMMA_PROVIDER=gemini and GEM
 bun run dev            # http://localhost:4000
 ```
 
+Analysis needs Redis 6.2 or newer at `REDIS_URL` (default `redis://127.0.0.1:6379`), e.g. `docker run -d -p 6379:6379 redis`.
+
 ### Data: MongoDB, with db-sample as fallback
 
 At startup the server connects to `MONGODB_URI` / `MONGODB_DB` (default `mongodb://127.0.0.1:27017`, `news_sentiment`). `GET /` and the `dataset` field of `POST /analysis` say which source is in use (`source`, and `fallbackReason` when it is db-sample).
@@ -51,7 +53,15 @@ Articles are classified as positive, neutral or negative by Gemma (`GEMMA_MODEL`
 - `ollama` (the default when `GEMINI_API_KEY` is not set): run `ollama pull gemma4:e2b` and keep Ollama running. Requests go to `OLLAMA_URL` (default `http://localhost:11434`) with a `OLLAMA_NUM_CTX` context window (default 16384); `GEMMA_MODEL` defaults to `gemma4:e2b` and `GEMMA_RPM` is not applied.
 - `gemini`: create a key in [Google AI Studio](https://aistudio.google.com/apikey) and set `GEMINI_API_KEY`; `GEMMA_MODEL` defaults to `gemma-4-26b-a4b-it`.
 
-Analysis runs on demand: when the frontend asks for a filter (`POST /analysis`), the newest articles in that selection without a sentiment are queued (`ANALYSIS_QUEUE_LIMIT`, default 100). A single worker sends them in batches of `GEMMA_BATCH_SIZE` (default 5 with Ollama, 10 with Gemini; title, summary and up to `GEMMA_EXCERPT_CHARS` characters of text: 30000 with Ollama, which sends whole articles, and 700 with Gemini. With Ollama the text in one batch is also trimmed to fit `OLLAMA_NUM_CTX`: short articles go whole and long ones share the rest), spaced to `GEMMA_RPM` requests per minute, retrying rate-limit and server errors. Results (`label`, `score`, `reason`, `model`, `analyzedAt`) are saved on the article in MongoDB (or to `sentiments.jsonl` on the db-sample fallback), so each article is analysed once. Articles the model fails on are retried at most 3 times per run of the server.
+Analysis runs in the background, independent of the frontend. Article ids wait in a Redis list (`ANALYSIS_QUEUE_KEY`, default `news_sentiment:analysis:queue`) used as a stack, so the newest articles are analysed first:
+
+- **Startup:** ids a restart cut off mid-batch are moved back on top. Then, if the queue is empty, it is filled with every article without a sentiment, newest on top. A queue that still has ids is left as it is.
+- **Scraping:** each new article is pushed on top as soon as it is saved, and the worker picks it up next.
+- **Worker:** a single worker takes `GEMMA_BATCH_SIZE` ids at a time from the top (default 5 with Ollama, 10 with Gemini) and sends their title, summary and up to `GEMMA_EXCERPT_CHARS` characters of text (30000 with Ollama, which sends whole articles, and 700 with Gemini; with Ollama the text in one batch is also trimmed to fit `OLLAMA_NUM_CTX`: short articles go whole and long ones share the rest), spaced to `GEMMA_RPM` requests per minute and retrying rate-limit and server errors. Taken ids sit in `<ANALYSIS_QUEUE_KEY>:processing` until the batch is saved.
+- **Results** (`label`, `score`, `reason`, `model`, `analyzedAt`) are saved on the article in MongoDB (or to `sentiments.jsonl` on the db-sample fallback), so each article is analysed once. Articles the model fails on go to the bottom of the queue and are tried at most 3 times per run of the server. After a failed request the worker waits 5 s, doubling up to 5 min.
+- **Without Redis** the server still starts and serves the dashboard; the worker retries the connection with the same backoff, and `GET /analysis/status` reports `redis.connected: false`. Articles scraped while Redis is down are not queued until the queue is next filled (an empty queue at startup).
+
+Run one backend per `ANALYSIS_QUEUE_KEY`: the processing list belongs to a single worker.
 
 ### Unified categories
 
@@ -107,13 +117,30 @@ Each portal names its sections differently, so `src/taxonomy.ts` maps every `por
 | GET    | `/scrape/runs`           | Recent scrape runs. Query: `portal`, `limit`                                                  |
 | GET    | `/analysis/categories`   | Unified category tree with article counts and portals. Query: `days` (1, 3, 7, 30)            |
 | POST   | `/analysis`              | Dashboard for a filter (see below)                                                            |
-| GET    | `/analysis/status`       | Analysis queue progress                                                                       |
+| GET    | `/analysis/status`       | Analysis progress: analysed / unanalysed counts and the queue (see below)                     |
 
 ### `POST /analysis`
 
-Body: `{ "categories": ["olahraga", "ekonomi/energi"], "days": 7, "analyze": "auto" }`. `categories` are unified ids (a root selects all its sub-categories; empty means everything). `analyze` is `auto` (queue the newest unanalysed articles), `all` (up to 1000) or `none` (read only).
+Body: `{ "categories": ["olahraga", "ekonomi/energi"], "days": 7 }`. `categories` are unified ids (a root selects all its sub-categories; empty means everything). Read only: it does not queue anything.
 
-Returns totals, a breakdown (by root category, by sub-category when one root is selected, or by portal when one sub-category is selected), per-portal counts, a sentiment trend (2 h to 1 day buckets in WIB, overall plus the 3 largest portals), 12 recent articles spread across portals, `analysis { pending, queued, remaining, configured, lastError }` and `dataset { name, source, articles, exportedAt, latestArticleAt, fallbackReason }`. Only analysed articles count towards sentiment; poll with `analyze: "none"` while `pending` is above zero.
+Returns totals, a breakdown (by root category, by sub-category when one root is selected, or by portal when one sub-category is selected), per-portal counts, a sentiment trend (2 h to 1 day buckets in WIB, overall plus the 3 largest portals), 12 recent articles spread across portals and `dataset { name, source, articles, exportedAt, latestArticleAt, fallbackReason }`. Only analysed articles count towards sentiment.
+
+### `GET /analysis/status`
+
+```json
+{
+  "configured": true, "provider": "ollama", "model": "gemma4:e2b",
+  "running": true,
+  "pending": 4817,
+  "articles": { "total": 7758, "analyzed": 2941, "unanalyzed": 4817, "gaveUp": 0 },
+  "session": { "analyzed": 10, "failed": 0 },
+  "redis": { "connected": true, "url": "redis://127.0.0.1:6379" },
+  "lastError": null,
+  "dataset": { ... }
+}
+```
+
+`pending` is the queue plus the batch in progress, `articles` counts every loaded article (`gaveUp`: failed 3 times), `session` counts since the server started. The frontend polls this and reloads `POST /analysis` when `articles.analyzed` or `articles.total` changes.
 
 ## Adding a portal
 

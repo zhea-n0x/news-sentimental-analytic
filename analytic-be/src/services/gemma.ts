@@ -225,9 +225,11 @@ async function generate(prompt: string): Promise<string> {
   }
 }
 
-/** Sentiment for each article, keyed by its id. Articles the model skipped are missing. */
-export async function analyzeSentiment(items: SentimentInput[]): Promise<Map<string, SentimentOutput>> {
-  const reply = await generate(buildPrompt(items))
+/** Sentiment for each article, keyed by its id (articles the model skipped are missing), and the prompt's length. */
+export async function analyzeSentiment(items: SentimentInput[]) {
+  const prompt = buildPrompt(items)
+  const reply = await generate(prompt)
   const byIndex = parseReply(reply, items.length)
-  return new Map([...byIndex].map(([index, result]) => [items[index]!.id, result]))
+  const results = new Map<string, SentimentOutput>([...byIndex].map(([index, result]) => [items[index]!.id, result]))
+  return { results, promptChars: prompt.length }
 }

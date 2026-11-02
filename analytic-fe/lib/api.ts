@@ -42,7 +42,17 @@ export interface ArticleCard {
   sentiment: { label: Sentiment; score: number; reason: string } | null;
 }
 
-export type AnalyzeMode = 'auto' | 'all' | 'none';
+/** Where the articles come from: MongoDB, or the db-sample backup when it is not available. Periods count back from the newest article. */
+export interface Dataset {
+  name: string;
+  source: 'mongodb' | 'db-sample' | null;
+  articles: number;
+  /** When the db-sample backup was exported (null for MongoDB). */
+  exportedAt: string | null;
+  latestArticleAt: string | null;
+  /** Why the db-sample backup is used instead of MongoDB. */
+  fallbackReason: string | null;
+}
 
 export interface AnalysisResponse {
   period: { days: number; from: string; to: string };
@@ -56,29 +66,25 @@ export interface AnalysisResponse {
     series: { key: string; name: string; points: (Counts & { analyzed: number })[] }[];
   };
   articles: ArticleCard[];
-  analysis: {
-    configured: boolean;
-    model: string;
-    /** Articles waiting for Gemma (whole queue). */
-    pending: number;
-    running: boolean;
-    /** Queued by this request. */
-    queued: number;
-    /** Articles in this selection without a sentiment yet. */
-    remaining: number;
-    lastError: string | null;
-  };
-  /** Where the articles come from: MongoDB, or the db-sample backup when it is not available. Periods count back from the newest article. */
-  dataset: {
-    name: string;
-    source: 'mongodb' | 'db-sample' | null;
-    articles: number;
-    /** When the db-sample backup was exported (null for MongoDB). */
-    exportedAt: string | null;
-    latestArticleAt: string | null;
-    /** Why the db-sample backup is used instead of MongoDB. */
-    fallbackReason: string | null;
-  };
+  dataset: Dataset;
+}
+
+/** The backend analyses articles from its Redis queue on its own; this is how far it has got. */
+export interface AnalysisStatusResponse {
+  configured: boolean;
+  provider: 'ollama' | 'gemini';
+  model: string;
+  /** A batch is with Gemma right now. */
+  running: boolean;
+  /** Articles waiting in the queue, plus the batch in progress. */
+  pending: number;
+  /** Every article in the dataset; `gaveUp` failed too often and is not retried. */
+  articles: { total: number; analyzed: number; unanalyzed: number; gaveUp: number };
+  /** Since the backend started. */
+  session: { analyzed: number; failed: number };
+  redis: { connected: boolean; url: string };
+  lastError: string | null;
+  dataset: Dataset;
 }
 
 export class ApiError extends Error {
@@ -125,15 +131,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const getCategories = (days: number, signal?: AbortSignal) =>
   request<CategoriesResponse>(`/analysis/categories?days=${days}`, { signal });
 
-export const getAnalysis = (
-  body: { categories: string[]; days: number; analyze: AnalyzeMode },
-  signal?: AbortSignal,
-) =>
+export const getAnalysis = (body: { categories: string[]; days: number }, signal?: AbortSignal) =>
   request<AnalysisResponse>('/analysis', {
     method: 'POST',
     body: JSON.stringify(body),
     signal,
   });
+
+export const getAnalysisStatus = (signal?: AbortSignal) =>
+  request<AnalysisStatusResponse>('/analysis/status', { signal });
 
 export const total = (c: Counts) => c.positive + c.neutral + c.negative;
 

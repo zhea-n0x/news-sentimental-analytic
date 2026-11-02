@@ -2,24 +2,28 @@
 
 import { Alert, Badge, Button, Group, Loader, Progress, Text, Tooltip } from '@mantine/core';
 import { IconAlertTriangle, IconDatabase, IconPlugConnectedX, IconSparkles } from '@tabler/icons-react';
-import type { AnalysisResponse } from '@/lib/api';
+import type { AnalysisResponse, AnalysisStatusResponse } from '@/lib/api';
 import { formatDateTime } from './formatDate';
 
 const fmt = (n: number) => n.toLocaleString('en-US');
 
-/** How much of the selection Gemma has analysed, what it is working on, and what went wrong. */
+/**
+ * How much of the selection Gemma has analysed, how far the backend's queue has got, and what went wrong.
+ * `status` is polled separately and is null until it first loads.
+ */
 export function AnalysisStatus({
   data,
-  onAnalyzeAll,
+  status,
 }: {
   data: AnalysisResponse;
-  onAnalyzeAll: () => void;
+  status: AnalysisStatusResponse | null;
 }) {
-  const { totals, analysis, dataset } = data;
+  const { totals, dataset } = data;
   const share = totals.articles ? (totals.analyzed / totals.articles) * 100 : 0;
-  const busy = analysis.pending > 0;
+  const queueDown = status !== null && !status.redis.connected;
+  const busy = status !== null && !queueDown && status.pending > 0;
 
-  if (!analysis.configured) {
+  if (status && !status.configured) {
     return (
       <Alert
         variant="light"
@@ -42,20 +46,30 @@ export function AnalysisStatus({
           {fmt(totals.analyzed)} of {fmt(totals.articles)} analysed
         </Text>
         <Progress value={share} size="sm" w={120} aria-label="Share of articles analysed" />
-        {busy && (
-          <Group gap={6} wrap="nowrap">
-            <Loader size={12} />
-            <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
-              {analysis.model} is analysing {fmt(analysis.pending)}
-            </Text>
-          </Group>
+        {status && (
+          <Tooltip
+            multiline
+            w={300}
+            label={`${fmt(status.articles.analyzed)} of ${fmt(status.articles.total)} articles analysed overall, ${fmt(
+              status.articles.unanalyzed,
+            )} not yet${status.articles.gaveUp ? ` (${fmt(status.articles.gaveUp)} failed too often)` : ''}. New articles are analysed first.`}
+          >
+            <Group gap={6} wrap="nowrap">
+              {busy && status.running && <Loader size={12} />}
+              <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+                {busy
+                  ? `${status.model} · ${fmt(status.pending)} in queue`
+                  : `${fmt(status.articles.unanalyzed)} not analysed overall`}
+              </Text>
+            </Group>
+          </Tooltip>
         )}
       </Group>
 
-      {analysis.lastError && (
-        <Tooltip label={analysis.lastError} multiline w={360}>
+      {status?.lastError && (
+        <Tooltip label={status.lastError} multiline w={360}>
           <Badge color="red" variant="light" radius="sm" leftSection={<IconAlertTriangle size={12} />}>
-            Gemma error
+            {queueDown ? 'Queue offline' : 'Gemma error'}
           </Badge>
         </Tooltip>
       )}
@@ -79,11 +93,6 @@ export function AnalysisStatus({
           {dataset.name}
         </Badge>
       </Tooltip>
-      {!busy && analysis.remaining > 0 && (
-        <Button size="compact-xs" variant="light" onClick={onAnalyzeAll}>
-          Analyse {analysis.remaining > 1000 ? 'next 1,000' : `remaining ${fmt(analysis.remaining)}`}
-        </Button>
-      )}
     </Group>
   );
 }
