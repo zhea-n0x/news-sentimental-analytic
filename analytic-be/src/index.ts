@@ -3,7 +3,7 @@ import { cors } from 'hono/cors'
 import { HTTPException } from 'hono/http-exception'
 import { logger } from 'hono/logger'
 import { config } from './config'
-import { datasetInfo, dbError, dbState, loadDb } from './db'
+import { datasetInfo, dbError, dbState, loadDb, scrapingEnabled } from './db'
 import { startScheduler } from './jobs/scheduler'
 import { analysisRoutes } from './routes/analysis'
 import { articleRoutes } from './routes/articles'
@@ -11,8 +11,8 @@ import { portalRoutes } from './routes/portals'
 import { scrapeRoutes } from './routes/scrape'
 import { scrapeAllPortals } from './services/scrape'
 
-// The data comes from the db-sample folder only (no MongoDB); it is read into memory here
-loadDb()
+// The data comes from MongoDB, or from the db-sample folder when MongoDB cannot be reached; it is read into memory here
+await loadDb()
 
 const app = new Hono()
 
@@ -23,7 +23,7 @@ app.get('/', (c) =>
   c.json({ name: 'analytic-be', status: dbState === 'ready' ? 'ok' : 'error', error: dbError, dataset: datasetInfo() }),
 )
 
-// If db-sample could not be read, data routes say why (503) instead of failing obscurely
+// If neither source could be read, data routes say why (503) instead of failing obscurely
 const requireData: MiddlewareHandler = async (c, next) => {
   if (dbState === 'ready') return next()
   return c.json({ error: `The local database could not be loaded: ${dbError}` }, 503)
@@ -50,8 +50,8 @@ if (!config.gemma.configured) {
   console.log(`[sentiment] using ${config.gemma.model} via ${where}`)
 }
 
-// Scraping adds new articles to db-sample's files, so it only runs when explicitly enabled
-if (dbState === 'ready' && config.scrapeEnabled) {
+// Scraping writes into MongoDB (unless SCRAPE_ENABLED=false); into db-sample's files only when explicitly enabled
+if (dbState === 'ready' && scrapingEnabled()) {
   startScheduler()
   if (config.scrapeOnStart) {
     scrapeAllPortals('startup').catch((err) => console.error('[startup] scrape failed', err))

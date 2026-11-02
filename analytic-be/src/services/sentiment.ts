@@ -1,5 +1,5 @@
 import { config } from '../config'
-import { getArticle, recordSentimentFailure, saveSentiments } from '../db'
+import { getArticle, recordSentimentFailure, saveSentiments, withContent } from '../db'
 import { analyzeSentiment } from './gemma'
 
 // After this many failed attempts an article is left unanalysed (until the next restart)
@@ -69,17 +69,18 @@ async function work() {
 }
 
 async function analyzeBatch(ids: string[]) {
-  const docs = ids.map(getArticle).filter((a) => a !== undefined && !a.sentiment)
-  if (!docs.length) return
+  const pending = ids.filter((id) => !getArticle(id)?.sentiment)
+  if (!pending.length) return
+  const docs = await withContent(pending)
 
   const results = await analyzeSentiment(
-    docs.map((d) => ({ id: d!._id, title: d!.title, description: d!.description, content: d!.content })),
+    docs.map((d) => ({ id: d._id, title: d.title, description: d.description, content: d.content })),
   )
   const now = new Date()
-  saveSentiments(
+  await saveSentiments(
     [...results].map(([id, result]) => ({ id, sentiment: { ...result, model: config.gemma.model, analyzedAt: now } })),
   )
-  for (const d of docs) if (!results.has(d!._id)) recordSentimentFailure(d!._id)
+  for (const d of docs) if (!results.has(d._id)) recordSentimentFailure(d._id)
 
   analyzed += results.size
   failed += docs.length - results.size

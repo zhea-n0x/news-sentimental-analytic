@@ -1,4 +1,4 @@
-import { portals } from '../db'
+import { portals, setPortalAccess } from '../db'
 import { aiCrawlersDisallowed, assertAllowed, RobotsDisallowedError, RobotsUnavailableError } from '../lib/robots'
 import type { PortalScraper } from '../scrapers/types'
 import type { PortalAccess } from '../types'
@@ -26,12 +26,9 @@ export async function checkPortalAccess({ portal }: PortalScraper): Promise<Acce
 
 /** Stores the portal's access status (keeping `since` while it is unchanged) and logs every change. */
 export async function saveAccess(portalKey: string, access: AccessCheck) {
-  const previous = (await portals.findOne({ key: portalKey }, { projection: { access: 1 } }))?.access
+  const previous = portals.get(portalKey)?.access
   const changed = previous?.status !== access.status
-  await portals.updateOne(
-    { key: portalKey },
-    { $set: { access: { ...access, since: changed || !previous ? access.checkedAt : previous.since } } },
-  )
+  await setPortalAccess(portalKey, { ...access, since: changed || !previous ? access.checkedAt : previous.since })
   if (changed && (previous || access.status !== 'ok')) {
     console.warn(
       `[access:${portalKey}] ${previous?.status ?? 'unknown'} -> ${access.status}${access.reason ? `: ${access.reason}` : ''}`,

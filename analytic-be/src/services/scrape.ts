@@ -6,6 +6,7 @@ import {
   insertArticle,
   isSkippedUrl,
   markPortalScraped,
+  recentTitleKeys,
   startScrapeRun,
   upsertCategory,
   upsertPortal,
@@ -58,19 +59,25 @@ export async function scrapePortal(scraper: PortalScraper, trigger: ScrapeTrigge
     errors: [],
     startedAt: new Date(),
   }
-  const runId = startScrapeRun(run)
+  let runId: string
+  try {
+    runId = await startScrapeRun(run)
+  } catch (err) {
+    running.delete(portal.key)
+    throw err
+  }
   console.log(`[scrape:${portal.key}] started (${trigger}) for ${run.dates.join(', ')}`)
   let access: AccessCheck | null = null
 
   try {
-    upsertPortal({ key: portal.key, name: portal.name, url: portal.url, indexUrl: portal.indexUrl })
+    await upsertPortal({ key: portal.key, name: portal.name, url: portal.url, indexUrl: portal.indexUrl })
 
     // robots.txt is re-read on every run; a portal that no longer allows its index is paused, not scraped
     access = await checkPortalAccess(scraper)
     if (access.status !== 'ok') {
       run.status = 'skipped'
       run.errors.push({ message: access.reason ?? access.status })
-      return { ...run, _id: insertedId }
+      return { ...run, _id: runId }
     }
 
     // Feeds and sitemaps reach back days or months; only keep what falls inside the lookback window
@@ -84,14 +91,11 @@ export async function scrapePortal(scraper: PortalScraper, trigger: ScrapeTrigge
     }
     run.listed = listed.size
 
-    // Skip articles already stored (or known not to be articles) before spending a request on them
-    const urls = [...listed.keys()]
-    const existing = urls.filter(hasArticle)
-    const ignored = urls.filter(isSkippedUrl)
-    const known = new Set([...existing, ...ignored])
-    run.skipped = existing.length
-    run.ignored = ignored.length
-    const fresh = [...listed.values()].filter((item) => !known.has(item.url))
+    const fresh = filterNew(portal.key, [...listed.values()], run)
+
+    const disallowed: string[] = []
+    let blockedInARow = 0
+    let stopReason: string | null = null
 
     await mapLimit(fresh, config.concurrency, async (item) => {
       if (stopReason) return
@@ -99,25 +103,50 @@ export async function scrapePortal(scraper: PortalScraper, trigger: ScrapeTrigge
         const scraped = await scraper.scrapeArticle(item.url)
         blockedInARow = 0
         const doc = toArticle(scraper, item, scraped)
-        if (insertArticle(doc)) {
+        if (await insertArticle(doc)) {
           run.inserted++
-          saveCategories(portal.key, doc.category, doc.subcategory)
+          await saveCategories(portal.key, doc.category, doc.subcategory)
         } else {
           run.skipped++
         }
       } catch (err) {
         if (err instanceof SkipArticle || err instanceof RobotsDisallowedError) {
           run.ignored++
-          addSkippedUrl({ url: item.url, portalKey: portal.key, reason: err.message, createdAt: new Date() })
-        } else {
-          run.failed++
-          run.errors.push({ url: item.url, message: errorMessage(err) })
+          if (err instanceof RobotsDisallowedError) disallowed.push(item.url)
+          const reason = err instanceof SkipArticle ? err.message : 'robots.txt'
+          await addSkippedUrl({ url: item.url, portalKey: portal.key, reason, createdAt: new Date() })
+          return
+        }
+        run.failed++
+        run.errors.push({ url: item.url, message: errorMessage(err) })
+        // Stop hammering a site that has started refusing us; the next run tries again
+        if (err instanceof BlockedError) {
+          stopReason = err.message
+        } else if (err instanceof HttpError && (err.status === 403 || err.status === 429)) {
+          blockedInARow++
+          if (blockedInARow >= config.maxBlockedResponses) {
+            stopReason = `${blockedInARow} responses in a row were HTTP ${err.status}`
+          }
         }
       }
     })
 
-    run.status = 'success'
-    markPortalScraped(portal.key)
+    if (stopReason) {
+      run.status = 'failed'
+      run.errors.push({ message: `Stopped early: ${stopReason}` })
+      access = { ...access, status: 'blocked', reason: stopReason }
+    } else {
+      run.status = 'success'
+      if (disallowed.length) {
+        access = {
+          ...access,
+          status: 'partial',
+          reason: `robots.txt disallows ${disallowed.length} article URL(s); they were skipped`,
+          disallowedUrls: disallowed.slice(0, 20),
+        }
+      }
+      await markPortalScraped(portal.key)
+    }
   } catch (err) {
     run.status = 'failed'
     run.errors.push({ message: errorMessage(err) })
@@ -130,10 +159,15 @@ export async function scrapePortal(scraper: PortalScraper, trigger: ScrapeTrigge
       access = { ...access, status: 'blocked', reason: err.message }
     }
   } finally {
-    if (access) await saveAccess(portal.key, access)
-    run.finishedAt = new Date()
-    finishScrapeRun(runId, run)
-    running.delete(portal.key)
+    try {
+      if (access) await saveAccess(portal.key, access)
+      run.finishedAt = new Date()
+      await finishScrapeRun(runId, run)
+    } catch (err) {
+      console.error(`[scrape:${portal.key}] could not save the run:`, err)
+    } finally {
+      running.delete(portal.key)
+    }
     console.log(
       `[scrape:${portal.key}] ${run.status}: listed=${run.listed} inserted=${run.inserted} skipped=${run.skipped} ` +
         `duplicates=${run.duplicates} ignored=${run.ignored} failed=${run.failed}`,
@@ -147,30 +181,20 @@ export async function scrapePortal(scraper: PortalScraper, trigger: ScrapeTrigge
  * Drops listed items that must not be fetched, before any request is made: URLs already stored or remembered as
  * non-articles, and titles this portal already published recently under another URL (or twice in this listing).
  */
-async function filterNew(portalKey: string, items: ListedArticle[], run: ScrapeRun) {
-  const urls = items.map((item) => item.url)
-  const keys = [...new Set(items.map((item) => titleKey(item.title)).filter((key) => key !== null))]
+function filterNew(portalKey: string, items: ListedArticle[], run: ScrapeRun) {
   // Only recent titles count: recurring headlines ("Harga Emas Antam Hari Ini") are new articles on another day
   const since = new Date(Date.now() - (config.lookbackDays + 2) * 86_400_000)
-
-  const [existing, ignored, sameTitle] = await Promise.all([
-    articles.find({ url: { $in: urls } }, { projection: { url: 1 } }).toArray(),
-    skippedUrls.find({ url: { $in: urls } }, { projection: { url: 1 } }).toArray(),
-    articles
-      .find(
-        { 'portal.key': portalKey, titleKeys: { $in: keys }, scrapedAt: { $gte: since } },
-        { projection: { titleKeys: 1 } },
-      )
-      .toArray(),
-  ])
-  run.skipped = existing.length
-  run.ignored = ignored.length
-
-  const knownUrls = new Set([...existing, ...ignored].map((doc) => doc.url))
-  const knownTitles = new Set(sameTitle.flatMap((doc) => doc.titleKeys))
+  const knownTitles = recentTitleKeys(portalKey, since)
   const fresh: ListedArticle[] = []
   for (const item of items) {
-    if (knownUrls.has(item.url)) continue
+    if (hasArticle(item.url)) {
+      run.skipped++
+      continue
+    }
+    if (isSkippedUrl(item.url)) {
+      run.ignored++
+      continue
+    }
     const key = titleKey(item.title)
     if (key && knownTitles.has(key)) {
       run.duplicates++
@@ -180,14 +204,6 @@ async function filterNew(portalKey: string, items: ListedArticle[], run: ScrapeR
     fresh.push(item)
   }
   return fresh
-}
-
-async function rememberSkipped(portalKey: string, url: string, reason: string) {
-  await skippedUrls.updateOne(
-    { url },
-    { $setOnInsert: { url, portalKey, reason, createdAt: new Date() } },
-    { upsert: true },
-  )
 }
 
 function toArticle(scraper: PortalScraper, item: ListedArticle, scraped: ScrapedArticle): Article {
@@ -225,9 +241,9 @@ function toCategoryRef(value: string | null | undefined): CategoryRef | null {
   return slug ? { name, slug } : null
 }
 
-function saveCategories(portalKey: string, category: CategoryRef, subcategory: CategoryRef | null) {
-  upsertCategory(portalKey, category, null)
-  if (subcategory) upsertCategory(portalKey, subcategory, category.slug)
+async function saveCategories(portalKey: string, category: CategoryRef, subcategory: CategoryRef | null) {
+  await upsertCategory(portalKey, category, null)
+  if (subcategory) await upsertCategory(portalKey, subcategory, category.slug)
 }
 
 function errorMessage(err: unknown) {

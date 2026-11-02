@@ -1,6 +1,5 @@
 import { Hono } from 'hono'
-import { config } from '../config'
-import { scrapeRuns } from '../db'
+import { dbSource, scrapeRuns, scrapingEnabled } from '../db'
 import { getScraper, scrapers } from '../scrapers'
 import { isScraping, scrapePortal } from '../services/scrape'
 
@@ -8,8 +7,9 @@ export const scrapeRoutes = new Hono()
 
 // Starts a scrape in the background; poll GET /scrape/runs for the result
 scrapeRoutes.post('/run', (c) => {
-  if (!config.scrapeEnabled) {
-    return c.json({ error: 'Scraping is off. Set SCRAPE_INTO_DB_SAMPLE=true to add new articles to db-sample.' }, 409)
+  if (!scrapingEnabled()) {
+    const setting = dbSource === 'mongodb' ? 'SCRAPE_ENABLED=true' : 'SCRAPE_INTO_DB_SAMPLE=true to add new articles to db-sample'
+    return c.json({ error: `Scraping is off. Set ${setting}.` }, 409)
   }
   const key = c.req.query('portal')
   const targets = key ? [getScraper(key)].filter((s) => s !== undefined) : scrapers

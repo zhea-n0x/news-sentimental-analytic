@@ -1,5 +1,5 @@
 import { Hono, type Context } from 'hono'
-import { articles, getArticle } from '../db'
+import { articles, withContent } from '../db'
 
 export const articleRoutes = new Hono()
 
@@ -31,8 +31,8 @@ export function listArticles(c: Context, portalKey?: string) {
 
 articleRoutes.get('/', (c) => listArticles(c))
 
-articleRoutes.get('/:id', (c) => {
-  const article = getArticle(c.req.param('id'))
+articleRoutes.get('/:id', async (c) => {
+  const [article] = await withContent([c.req.param('id')])
   if (!article) return c.json({ error: 'Article not found' }, 404)
   return c.json(article)
 })

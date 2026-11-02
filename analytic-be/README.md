@@ -1,6 +1,6 @@
 # analytic-be
 
-Hono service that serves Indonesian news articles from the local `db-sample` folder, analyses their sentiment with Gemma and serves the results to `analytic-fe`. It does not use MongoDB. The scraper for 12 portals is included but off by default.
+Hono service that scrapes Indonesian news articles from 12 portals into MongoDB, analyses their sentiment with Gemma and serves the results to `analytic-fe`. When MongoDB cannot be reached at startup it falls back to the `db-sample` backup folder.
 
 ## Supported portals
 
@@ -29,26 +29,29 @@ cp .env.example .env   # Ollama by default; or set GEMMA_PROVIDER=gemini and GEM
 bun run dev            # http://localhost:4000
 ```
 
-### Data: db-sample
+### Data: MongoDB, with db-sample as fallback
 
-The data comes from `../db-sample` (`DB_SAMPLE_DIR`), a `mongoexport` backup with one Extended JSON document per line per collection. It is read into memory at startup; there is no database server or MongoDB connection.
+At startup the server connects to `MONGODB_URI` / `MONGODB_DB` (default `mongodb://127.0.0.1:27017`, `news_sentiment`). `GET /` and the `dataset` field of `POST /analysis` say which source is in use (`source`, and `fallbackReason` when it is db-sample).
 
-- Analysis periods count back from the newest article in the folder, so the snapshot keeps showing its last days instead of going empty over time.
-- Gemma's results are appended to `db-sample/sentiments.jsonl` (`SENTIMENT_FILE`), one JSON line per analysed article, and loaded again on the next start. The backup's own files are not changed by analysis.
-- If the folder cannot be read, the server still starts and every data route answers `503` with the reason.
+- **MongoDB** (when it answers within `MONGODB_CONNECT_TIMEOUT_MS`, default 3000): the collections are read into memory (articles without their text, which is read from MongoDB when needed) and every change (scraped articles, Gemma results, portals, runs) is written back. Results in `sentiments.jsonl` for articles that have no sentiment in MongoDB yet are imported at startup. Documents written to the database by another process show after a restart.
+- **db-sample** (otherwise): `../db-sample` (`DB_SAMPLE_DIR`), a `mongoexport` backup with one Extended JSON document per line per collection, is read into memory. Gemma's results are appended to `db-sample/sentiments.jsonl` (`SENTIMENT_FILE`) and loaded again on the next start; the backup's own files are not changed by analysis.
+- Analysis periods count back from the newest article, so a snapshot keeps showing its last days instead of going empty over time.
+- If neither can be read, the server still starts and every data route answers `503` with the reason.
 
-### Scraping (optional)
+To load the backup into an empty MongoDB: `bun run ../db-sample/restore.ts ../db-sample`.
 
-Off unless `SCRAPE_INTO_DB_SAMPLE=true` (the old `SCRAPE_ENABLED` setting is ignored). When on, the scraper runs hourly (and once at startup unless `SCRAPE_ON_START=false`) and writes into `db-sample` itself: new articles and skipped URLs are appended to `articles.json` / `skipped_urls.json`, `portals.json` and `categories.json` are rewritten, runs are appended to `scrape_runs.json`, and `manifest.json` counts are updated. The files stay in `mongoexport` format, so `db-sample/restore.ts` can still load them into MongoDB.
+### Scraping
+
+Into MongoDB: on unless `SCRAPE_ENABLED=false`. On the db-sample fallback: off unless `SCRAPE_INTO_DB_SAMPLE=true`. When on, the scraper runs hourly (and once at startup unless `SCRAPE_ON_START=false`). On db-sample it writes into the folder itself: new articles and skipped URLs are appended to `articles.json` / `skipped_urls.json`, `portals.json` and `categories.json` are rewritten, runs are appended to `scrape_runs.json`, and `manifest.json` counts are updated. The files stay in `mongoexport` format, so `db-sample/restore.ts` can still load them into MongoDB.
 
 ### Sentiment analysis
 
 Articles are classified as positive, neutral or negative by Gemma (`GEMMA_MODEL`), either on a local [Ollama](https://ollama.com) server or through the Gemini API, chosen by `GEMMA_PROVIDER`:
 
-- `ollama` (the default when `GEMINI_API_KEY` is not set): run `ollama pull gemma4:e4b` and keep Ollama running. Requests go to `OLLAMA_URL` (default `http://localhost:11434`) with a `OLLAMA_NUM_CTX` context window (default 8192); `GEMMA_MODEL` defaults to `gemma4:e4b` and `GEMMA_RPM` is not applied.
+- `ollama` (the default when `GEMINI_API_KEY` is not set): run `ollama pull gemma4:e2b` and keep Ollama running. Requests go to `OLLAMA_URL` (default `http://localhost:11434`) with a `OLLAMA_NUM_CTX` context window (default 16384); `GEMMA_MODEL` defaults to `gemma4:e2b` and `GEMMA_RPM` is not applied.
 - `gemini`: create a key in [Google AI Studio](https://aistudio.google.com/apikey) and set `GEMINI_API_KEY`; `GEMMA_MODEL` defaults to `gemma-4-26b-a4b-it`.
 
-Analysis runs on demand: when the frontend asks for a filter (`POST /analysis`), the newest articles in that selection without a sentiment are queued (`ANALYSIS_QUEUE_LIMIT`, default 100). A single worker sends them in batches of `GEMMA_BATCH_SIZE` (default 5 with Ollama, 10 with Gemini; title, summary and the first `GEMMA_EXCERPT_CHARS` characters of text), spaced to `GEMMA_RPM` requests per minute, retrying rate-limit and server errors. Results (`label`, `score`, `reason`, `model`, `analyzedAt`) are saved to `sentiments.jsonl`, so each article is analysed once. Articles the model fails on are retried at most 3 times per run of the server.
+Analysis runs on demand: when the frontend asks for a filter (`POST /analysis`), the newest articles in that selection without a sentiment are queued (`ANALYSIS_QUEUE_LIMIT`, default 100). A single worker sends them in batches of `GEMMA_BATCH_SIZE` (default 5 with Ollama, 10 with Gemini; title, summary and up to `GEMMA_EXCERPT_CHARS` characters of text: 30000 with Ollama, which sends whole articles, and 700 with Gemini. With Ollama the text in one batch is also trimmed to fit `OLLAMA_NUM_CTX`: short articles go whole and long ones share the rest), spaced to `GEMMA_RPM` requests per minute, retrying rate-limit and server errors. Results (`label`, `score`, `reason`, `model`, `analyzedAt`) are saved on the article in MongoDB (or to `sentiments.jsonl` on the db-sample fallback), so each article is analysed once. Articles the model fails on are retried at most 3 times per run of the server.
 
 ### Unified categories
 
@@ -83,11 +86,11 @@ Each portal names its sections differently, so `src/taxonomy.ts` maps every `por
 
 `access.reason` explains the status, `access.since` is when it last changed, and `access.aiCrawlersDisallowed` lists AI crawler user agents the portal opts out of (informational). Every status change is also logged as `[access:<portal>] old -> new: reason`.
 
-## Data files (db-sample)
+## Collections (MongoDB and db-sample)
 
 - `portals`: `key`, `name`, `url`, `indexUrl`, `access { status, reason, disallowedUrls, aiCrawlersDisallowed, checkedAt, since }`, `lastScrapedAt`
 - `categories`: `portalKey`, `name`, `slug`, `parentSlug` (`null` for top level), deduplicated by slug
-- `articles`: `url`, `portal { key, name, url }`, `title`, `titleKeys`, `description`, `content`, `category { name, slug }`, `subcategory`, `tags`, `author`, `editor`, `imageUrl`, `publishedAt`, `wordCount`, `scrapedAt`
+- `articles`: `url`, `portal { key, name, url }`, `title`, `titleKeys`, `description`, `content`, `category { name, slug }`, `subcategory`, `tags`, `author`, `editor`, `imageUrl`, `publishedAt`, `wordCount`, `scrapedAt`, `sentiment { label, score, reason, model, analyzedAt }` (MongoDB only; db-sample keeps it in `sentiments.jsonl`)
 - `scrape_runs`: `portalKey`, `trigger`, `status`, `listed`, `inserted`, `skipped` (known URL), `duplicates` (known title), `ignored`, `failed`, `errors`, `startedAt`, `finishedAt`
 - `skipped_urls`: `url`, `portalKey`, `reason`, `createdAt` (expires after 14 days)
 
@@ -100,7 +103,7 @@ Each portal names its sections differently, so `src/taxonomy.ts` maps every `por
 | GET    | `/portals/:key/articles` | Articles of one portal (same query options as `/articles`)                                    |
 | GET    | `/articles`              | List (no content). Query: `portal` (key, or comma-separated keys), `category`, `subcategory` (slugs), `q`, `page`, `limit` |
 | GET    | `/articles/:id`          | Full article including content                                                                |
-| POST   | `/scrape/run?portal=key` | Start a scrape now (all portals if `portal` omitted); returns 202. `409` while `SCRAPE_INTO_DB_SAMPLE` is off |
+| POST   | `/scrape/run?portal=key` | Start a scrape now (all portals if `portal` omitted); returns 202. `409` while scraping is off (`SCRAPE_ENABLED`, or `SCRAPE_INTO_DB_SAMPLE` on db-sample) |
 | GET    | `/scrape/runs`           | Recent scrape runs. Query: `portal`, `limit`                                                  |
 | GET    | `/analysis/categories`   | Unified category tree with article counts and portals. Query: `days` (1, 3, 7, 30)            |
 | POST   | `/analysis`              | Dashboard for a filter (see below)                                                            |
@@ -110,7 +113,7 @@ Each portal names its sections differently, so `src/taxonomy.ts` maps every `por
 
 Body: `{ "categories": ["olahraga", "ekonomi/energi"], "days": 7, "analyze": "auto" }`. `categories` are unified ids (a root selects all its sub-categories; empty means everything). `analyze` is `auto` (queue the newest unanalysed articles), `all` (up to 1000) or `none` (read only).
 
-Returns totals, a breakdown (by root category, by sub-category when one root is selected, or by portal when one sub-category is selected), per-portal counts, a sentiment trend (2 h to 1 day buckets in WIB, overall plus the 3 largest portals), 12 recent articles spread across portals, `analysis { pending, queued, remaining, configured, lastError }` and `dataset { name, articles, exportedAt, latestArticleAt }`. Only analysed articles count towards sentiment; poll with `analyze: "none"` while `pending` is above zero.
+Returns totals, a breakdown (by root category, by sub-category when one root is selected, or by portal when one sub-category is selected), per-portal counts, a sentiment trend (2 h to 1 day buckets in WIB, overall plus the 3 largest portals), 12 recent articles spread across portals, `analysis { pending, queued, remaining, configured, lastError }` and `dataset { name, source, articles, exportedAt, latestArticleAt, fallbackReason }`. Only analysed articles count towards sentiment; poll with `analyze: "none"` while `pending` is above zero.
 
 ## Adding a portal
 

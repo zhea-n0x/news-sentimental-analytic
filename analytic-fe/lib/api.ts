@@ -68,12 +68,16 @@ export interface AnalysisResponse {
     remaining: number;
     lastError: string | null;
   };
-  /** Where the articles come from: the db-sample backup. Periods count back from its newest article. */
+  /** Where the articles come from: MongoDB, or the db-sample backup when it is not available. Periods count back from the newest article. */
   dataset: {
     name: string;
+    source: 'mongodb' | 'db-sample' | null;
     articles: number;
+    /** When the db-sample backup was exported (null for MongoDB). */
     exportedAt: string | null;
     latestArticleAt: string | null;
+    /** Why the db-sample backup is used instead of MongoDB. */
+    fallbackReason: string | null;
   };
 }
 

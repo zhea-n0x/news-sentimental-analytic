@@ -62,13 +62,20 @@ export function AnalysisStatus({
       <Tooltip
         multiline
         w={300}
-        label={`${fmt(dataset.articles)} articles from the ${dataset.name} backup${
-          dataset.exportedAt ? `, exported ${formatDateTime(dataset.exportedAt)}` : ''
+        label={`${fmt(dataset.articles)} articles from ${
+          dataset.source === 'mongodb' ? 'MongoDB' : `the ${dataset.name} backup`
+        }${dataset.exportedAt ? `, exported ${formatDateTime(dataset.exportedAt)}` : ''}${
+          dataset.fallbackReason ? ` (MongoDB is not available: ${dataset.fallbackReason})` : ''
         }. Periods count back from the newest article${
           dataset.latestArticleAt ? ` (${formatDateTime(dataset.latestArticleAt)})` : ''
         }.`}
       >
-        <Badge color="gray" variant="light" radius="sm" leftSection={<IconDatabase size={12} />}>
+        <Badge
+          color={dataset.fallbackReason ? 'yellow' : 'gray'}
+          variant="light"
+          radius="sm"
+          leftSection={<IconDatabase size={12} />}
+        >
           {dataset.name}
         </Badge>
       </Tooltip>

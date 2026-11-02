@@ -27,10 +27,39 @@ export class GemmaError extends Error {
   }
 }
 
-export function buildPrompt(items: SentimentInput[], excerptChars = config.gemma.excerptChars) {
+// Conservative estimate for Indonesian text, so the budget errs on the side of fitting
+const CHARS_PER_TOKEN = 3
+// Tokens kept free in the context for the instructions, titles, summaries and the reply
+const RESERVED_TOKENS = 2048
+
+/** Characters of article text one request can carry: what fits Ollama's context window, unlimited for the API. */
+function textBudget() {
+  const { provider, ollamaNumCtx } = config.gemma
+  return provider === 'ollama' ? Math.max(0, ollamaNumCtx - RESERVED_TOKENS) * CHARS_PER_TOKEN : Infinity
+}
+
+/** Splits the budget across articles: short ones are sent whole, longer ones share what is left equally. */
+function excerptLimits(lengths: number[], excerptChars: number, budget: number) {
+  const limits = lengths.map(() => 0)
+  const shortestFirst = lengths.map((_, i) => i).sort((a, b) => lengths[a]! - lengths[b]!)
+  let remaining = budget
+  shortestFirst.forEach((i, k) => {
+    limits[i] = Math.min(lengths[i]!, excerptChars, Math.floor(remaining / (lengths.length - k)))
+    remaining -= limits[i]!
+  })
+  return limits
+}
+
+export function buildPrompt(items: SentimentInput[], excerptChars = config.gemma.excerptChars, budget = textBudget()) {
+  const texts = items.map((item) => cleanText(item.content))
+  const limits = excerptLimits(
+    texts.map((t) => t.length),
+    excerptChars,
+    budget,
+  )
   const articles = items
     .map((item, i) => {
-      const excerpt = cleanText(item.content).slice(0, excerptChars)
+      const excerpt = texts[i]!.slice(0, limits[i])
       return [
         `### a${i + 1}`,
         `Title: ${cleanText(item.title)}`,
@@ -131,7 +160,11 @@ async function generateOllama(prompt: string): Promise<string> {
     })
 
     if (res?.ok) {
-      const data = (await res.json()) as { message?: { content?: string } }
+      const data = (await res.json()) as { message?: { content?: string }; prompt_eval_count?: number }
+      // Ollama silently cuts prompts longer than the context window, which can drop the instructions
+      if ((data.prompt_eval_count ?? 0) >= ollamaNumCtx) {
+        console.warn(`[sentiment] prompt filled the ${ollamaNumCtx}-token context and was cut; raise OLLAMA_NUM_CTX`)
+      }
       return data.message?.content ?? ''
     }
 
